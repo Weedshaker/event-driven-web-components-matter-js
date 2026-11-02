@@ -1,0 +1,529 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Wrestling Physics World</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: #101522;
+  color: #e5edff;
+  font-family: system-ui, sans-serif;
+}
+
+h2 { margin-top: 0; }
+
+.world {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  overflow: hidden;
+  border: 1px solid #35435e;
+  border-radius: 12px;
+  background-color: #151e30;
+  background-image:
+    linear-gradient(#ffffff0b 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff0b 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.axis-x, .axis-y {
+  position: absolute;
+  background: #64748b;
+}
+
+.axis-x {
+  height: 1px;
+  width: 100%;
+  top: 50%;
+}
+
+.axis-y {
+  width: 1px;
+  height: 100%;
+  left: 50%;
+}
+
+/* PIXEL CHARACTER */
+
+#player {
+  position: absolute;
+  width: 48px;
+  height: 52px;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  image-rendering: pixelated;
+  z-index: 2;
+}
+
+.hair {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 38px;
+  height: 13px;
+  background: #f5c542;
+  box-shadow:
+    -4px 5px #d99b19,
+    4px 4px #ffe16b,
+    0 -4px #ffe16b,
+    10px 5px #e7a91c;
+  z-index: 3;
+}
+
+.face {
+  position: absolute;
+  left: 7px;
+  top: 11px;
+  width: 34px;
+  height: 31px;
+  background: #f2a65a;
+  border: 3px solid #b96b32;
+  box-shadow: inset 0 -5px #d98b48;
+}
+
+.eyes {
+  position: absolute;
+  top: 6px;
+  left: 5px;
+  color: #222;
+  font-size: 9px;
+  letter-spacing: 4px;
+}
+
+.nose {
+  position: absolute;
+  top: 13px;
+  left: 14px;
+  width: 5px;
+  height: 6px;
+  background: #ce8044;
+}
+
+.mouth {
+  position: absolute;
+  left: 10px;
+  bottom: 3px;
+  width: 12px;
+  height: 3px;
+  background: #873d30;
+}
+
+.ear {
+  position: absolute;
+  top: 22px;
+  left: 2px;
+  width: 7px;
+  height: 10px;
+  background: #e99b54;
+}
+
+.collar {
+  position: absolute;
+  bottom: -5px;
+  left: 13px;
+  width: 23px;
+  height: 11px;
+  background: #263c76;
+  border: 2px solid #17254b;
+}
+
+/* TRAIL */
+
+.trail {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #38bdf8;
+  pointer-events: none;
+}
+
+/* UI */
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.stat {
+  background: #1d293e;
+  padding: 12px;
+  border-radius: 8px;
+  flex: 1;
+  min-width: 110px;
+}
+
+.stat small { color: #94a3b8; }
+
+.stat strong {
+  display: block;
+  margin-top: 5px;
+}
+
+.controls {
+  color: #a5b4fc;
+  margin-top: 14px;
+  line-height: 1.8;
+}
+
+button {
+  background: #2563eb;
+  color: white;
+  border: 0;
+  border-radius: 7px;
+  padding: 11px 16px;
+  cursor: pointer;
+  margin: 5px 5px 5px 0;
+}
+
+button:hover { background: #3b82f6; }
+
+#soundStatus {
+  color: #fbbf24;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🥊 Pixel Wrestling Physics World</h2>
+<p>Fly around the Cartesian universe!</p>
+
+<div class="world" id="world">
+
+  <div class="axis-x"></div>
+  <div class="axis-y"></div>
+
+  <div id="player">
+    <div class="hair"></div>
+    <div class="ear"></div>
+    <div class="face">
+      <div class="eyes">▪ ▪</div>
+      <div class="nose"></div>
+      <div class="mouth"></div>
+    </div>
+    <div class="collar"></div>
+  </div>
+
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <small>Position (x,y)</small>
+    <strong id="position">0, 0</strong>
+  </div>
+
+  <div class="stat">
+    <small>Velocity (vx,vy)</small>
+    <strong id="velocity">0, 0</strong>
+  </div>
+
+  <div class="stat">
+    <small>Speed</small>
+    <strong id="speed">0</strong>
+  </div>
+</div>
+
+<button onclick="playEntrance()">🔊 Wrestling entrance</button>
+<button onclick="resetWorld()">↺ Reset</button>
+
+<div id="soundStatus">Sound ready — click entrance to play.</div>
+
+<div class="controls">
+  Controls: WASD / Arrow keys<br>
+  Shift: Turbo acceleration<br>
+  Release keys: Inertia and drifting
+</div>
+
+<script>
+// =====================================
+// 2D PHYSICS ENGINE
+// =====================================
+
+const world = document.getElementById("world");
+const player = document.getElementById("player");
+
+const positionText = document.getElementById("position");
+const velocityText = document.getElementById("velocity");
+const speedText = document.getElementById("speed");
+
+const keys = {};
+
+const physics = {
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  ax: 0,
+  ay: 0,
+
+  acceleration: 500,
+  friction: 0.985,
+  maxSpeed: 400
+};
+
+const trails = [];
+
+let lastTime = 0;
+let lastTrail = 0;
+
+// =====================================
+// KEYBOARD
+// =====================================
+
+window.addEventListener("keydown", e => {
+  if ([
+    "ArrowUp", "ArrowDown",
+    "ArrowLeft", "ArrowRight", " "
+  ].includes(e.key)) {
+    e.preventDefault();
+  }
+
+  keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// =====================================
+// RESET
+// =====================================
+
+function resetWorld() {
+  physics.x = 0;
+  physics.y = 0;
+  physics.vx = 0;
+  physics.vy = 0;
+  physics.ax = 0;
+  physics.ay = 0;
+
+  trails.forEach(t => t.remove());
+  trails.length = 0;
+
+  player.style.rotate = "0deg";
+}
+
+// =====================================
+// ANIMATION LOOP
+// =====================================
+
+function animate(time) {
+
+  if (!lastTime) lastTime = time;
+
+  const dt = Math.min(
+    (time - lastTime) / 1000,
+    0.04
+  );
+
+  lastTime = time;
+
+  // Acceleration
+  const boost = keys["shift"] ? 2 : 1;
+  const a = physics.acceleration * boost;
+
+  physics.ax =
+    ((keys["d"] || keys["arrowright"]) ? a : 0) -
+    ((keys["a"] || keys["arrowleft"]) ? a : 0);
+
+  physics.ay =
+    ((keys["s"] || keys["arrowdown"]) ? a : 0) -
+    ((keys["w"] || keys["arrowup"]) ? a : 0);
+
+  // Velocity integration
+  physics.vx += physics.ax * dt;
+  physics.vy += physics.ay * dt;
+
+  // Friction
+  const damping = Math.pow(
+    physics.friction,
+    dt * 60
+  );
+
+  physics.vx *= damping;
+  physics.vy *= damping;
+
+  // Velocity limit
+  const speed = Math.hypot(
+    physics.vx,
+    physics.vy
+  );
+
+  if (speed > physics.maxSpeed) {
+    physics.vx *= physics.maxSpeed / speed;
+    physics.vy *= physics.maxSpeed / speed;
+  }
+
+  // Position integration
+  physics.x += physics.vx * dt;
+  physics.y += physics.vy * dt;
+
+  // World dimensions
+  const cx = world.clientWidth / 2;
+  const cy = world.clientHeight / 2;
+
+  // Wrap around world boundaries
+  if (physics.x > cx) physics.x = -cx;
+  if (physics.x < -cx) physics.x = cx;
+
+  if (physics.y > cy) physics.y = -cy;
+  if (physics.y < -cy) physics.y = cy;
+
+  // Screen coordinates
+  player.style.left = (cx + physics.x) + "px";
+  player.style.top = (cy + physics.y) + "px";
+
+  // Face movement direction
+  if (speed > 5) {
+    const angle = Math.atan2(
+      physics.vy,
+      physics.vx
+    ) * 180 / Math.PI;
+
+    player.style.rotate = angle + "deg";
+  }
+
+  // Live stats
+  positionText.textContent =
+    `${physics.x.toFixed(1)}, ${(-physics.y).toFixed(1)}`;
+
+  velocityText.textContent =
+    `${physics.vx.toFixed(1)}, ${(-physics.vy).toFixed(1)}`;
+
+  speedText.textContent =
+    speed.toFixed(1) + " units/s";
+
+  // Motion trail
+  if (time - lastTrail > 50) {
+
+    const dot = document.createElement("div");
+
+    dot.className = "trail";
+
+    dot.style.left =
+      (cx + physics.x) + "px";
+
+    dot.style.top =
+      (cy + physics.y) + "px";
+
+    world.appendChild(dot);
+    trails.push(dot);
+
+    if (trails.length > 100) {
+      trails.shift().remove();
+    }
+
+    lastTrail = time;
+  }
+
+  requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+
+
+// =====================================
+// ORIGINAL WRESTLING-STYLE AUDIO
+// Web Audio synthesis
+// =====================================
+
+let audioContext;
+
+function playEntrance() {
+
+  audioContext ??= new (
+    window.AudioContext ||
+    window.webkitAudioContext
+  )();
+
+  audioContext.resume();
+
+  const ctx = audioContext;
+  const start = ctx.currentTime;
+
+  document.getElementById("soundStatus").textContent =
+    "🥁 Entrance music playing!";
+
+  // Brass-like melody
+  const notes = [
+    110, 146.83, 174.61,
+    220, 174.61, 146.83,
+    220, 261.63
+  ];
+
+  notes.forEach((frequency, i) => {
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.value = frequency;
+
+    const t = start + i * 0.22;
+
+    gain.gain.setValueAtTime(0, t);
+
+    gain.gain.linearRampToValueAtTime(
+      0.12, t + 0.03
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.001, t + 0.3
+    );
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.32);
+  });
+
+  // Percussion / bass drum
+  [0, 0.44, 0.88, 1.32].forEach(offset => {
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+
+    osc.frequency.setValueAtTime(
+      100, start + offset
+    );
+
+    osc.frequency.exponentialRampToValueAtTime(
+      35, start + offset + 0.18
+    );
+
+    gain.gain.setValueAtTime(
+      0.5, start + offset
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.001, start + offset + 0.2
+    );
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(start + offset);
+    osc.stop(start + offset + 0.22);
+  });
+}
+
+</script>
+
+</body>
+</html>
