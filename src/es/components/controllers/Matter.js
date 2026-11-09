@@ -13,10 +13,16 @@ import MatterWebWorker from './MatterWebWorker.js'
  * @export
  * @class Matter
  * @type {CustomElementConstructor}
+ * @param {any} [options = {namespace=undefined}]
+ * @param {*} args
  */
 export default class MatterElement extends HTMLElement {
-  constructor () {
+  constructor (options = { namespace: undefined }, ...args) {
     super()
+
+    // set attribute namespace
+    if (options.namespace) this.namespace = options.namespace
+    else if (!this.namespace) this.namespace = 'matter-'
 
     this.importMetaUrl = import.meta.url.replace(/(.*\/)(.*)$/, '$1')
 
@@ -30,8 +36,8 @@ export default class MatterElement extends HTMLElement {
         }
       },
       walls: {
-        width: Number(document.body.getAttribute('data-width')) || 1600,
-        height: Number(document.body.getAttribute('data-height')) || 1200
+        width: Number(this.globalEventTarget.getAttribute('data-width')) || 1600,
+        height: Number(this.globalEventTarget.getAttribute('data-height')) || 1200
       }
     }
 
@@ -39,11 +45,11 @@ export default class MatterElement extends HTMLElement {
       this.worker = new MatterWebWorker(engineCreateOptions)
         // start matter this.engine
         const render = Matter.Render.create({
-          element: document.body,
+          element: this.globalEventTarget,
           engine: this.worker.engine,
           options: {
-            width: Number(document.body.getAttribute('data-width')) || 1600,
-            height: Number(document.body.getAttribute('data-height')) || 1200,
+            width: Number(this.globalEventTarget.getAttribute('data-width')) || 1600,
+            height: Number(this.globalEventTarget.getAttribute('data-height')) || 1200,
             hasBounds: true,
             wireframes: true,
             showBounds: true,
@@ -85,7 +91,7 @@ export default class MatterElement extends HTMLElement {
     }
     const _dispatchEvent = () => {
       if (!bodies) return
-      this.dispatchEvent(new CustomEvent(this.getAttribute('matter-bodies') || 'matter-bodies', {
+      this.dispatchEvent(new CustomEvent(`${this.namespace}bodies`, {
         detail: {
           bodies
         },
@@ -99,11 +105,11 @@ export default class MatterElement extends HTMLElement {
 
     this.addBodyEventListener = event => {
       let webComponent = null
-      if (event && event.detail && (webComponent = event.detail.webComponent) && webComponent.hasAttribute('oid')) {
+      if (event && event.detail && (webComponent = event.detail.webComponent) && webComponent.hasAttribute('bid')) {
         // add a reference pointing to the webComponent
         this.worker.postMessage({
           type: 'addBody',
-          oid: webComponent.getAttribute('oid'),
+          bid: webComponent.getAttribute('bid'),
           shape: MatterElement.getRectangle(webComponent)
         })
       }
@@ -121,7 +127,7 @@ export default class MatterElement extends HTMLElement {
       if (event && event.detail && (webComponent = event.detail.webComponent)) {
         this.worker.postMessage({
           type: 'bodyPointerDown',
-          oid: webComponent.getAttribute('oid') || '',
+          bid: webComponent.getAttribute('bid') || '',
           position: event.detail.position
         })
       }
@@ -148,7 +154,7 @@ export default class MatterElement extends HTMLElement {
         let webComponent
         if (webComponentMap.has(key)) {
           webComponent = await webComponentMap.get(key)
-        } else if ((webComponent = yjsBody.uid ? this.querySelector(`[uid="${yjsBody.uid}"]`) : this.querySelector(`[oid="${yjsBody.oid}"]`))) {
+        } else if ((webComponent = yjsBody.uid ? this.querySelector(`[uid="${yjsBody.uid}"]`) : this.querySelector(`[bid="${yjsBody.bid}"]`))) {
           webComponentMap.set(key, Promise.resolve(webComponent))
         } else {
           let resolveWebComponent
@@ -157,7 +163,7 @@ export default class MatterElement extends HTMLElement {
           webComponent = new module.default
           webComponent.setAttribute('x', yjsBody.position.x)
           webComponent.setAttribute('y', yjsBody.position.y)
-          webComponent.setAttribute('oid', yjsBody.oid)
+          webComponent.setAttribute('bid', yjsBody.bid)
           webComponent.setAttribute('uid', yjsBody.uid)
           webComponent.setAttribute('is-static', yjsBody.isStatic)
           // TODO: make dynamic width, height, shape
@@ -177,21 +183,21 @@ export default class MatterElement extends HTMLElement {
   }
 
   connectedCallback () {
-    document.body.addEventListener(this.getAttribute('add-body') || 'add-body', this.addBodyEventListener)
-    document.body.addEventListener(this.getAttribute('remove-body') || 'remove-body', this.removeBodyEventListener)
-    document.body.addEventListener(this.getAttribute('body-pointer-down') || 'body-pointer-down', this.bodyPointerDownEventListener)
-    document.body.addEventListener(this.getAttribute('body-pointer-move') || 'body-pointer-move', this.bodyPointerMoveEventListener)
-    document.body.addEventListener(this.getAttribute('body-pointer-up') || 'body-pointer-up', this.bodyPointerUpEventListener)
-    document.body.addEventListener('yjs-bodies', this.yjsBodiesEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}add-body`, this.addBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-down') || 'wc-body-pointer-down', this.bodyPointerDownEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-move') || 'wc-body-pointer-move', this.bodyPointerMoveEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-up') || 'wc-body-pointer-up', this.bodyPointerUpEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('yjs-bodies') || 'yjs-bodies', this.yjsBodiesEventListener)
   }
 
   disconnectedCallback () {
-    document.body.removeEventListener(this.getAttribute('add-body') || 'add-body', this.addBodyEventListener)
-    document.body.removeEventListener(this.getAttribute('remove-body') || 'remove-body', this.removeBodyEventListener)
-    document.body.removeEventListener(this.getAttribute('body-pointer-down') || 'body-pointer-down', this.bodyPointerDownEventListener)
-    document.body.removeEventListener(this.getAttribute('body-pointer-move') || 'body-pointer-move', this.bodyPointerMoveEventListener)
-    document.body.removeEventListener(this.getAttribute('body-pointer-up') || 'body-pointer-up', this.bodyPointerUpEventListener)
-    document.body.removeEventListener('yjs-bodies', this.yjsBodiesEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}add-body`, this.addBodyEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-down') || 'wc-body-pointer-down', this.bodyPointerDownEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-move') || 'wc-body-pointer-move', this.bodyPointerMoveEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-up') || 'wc-body-pointer-up', this.bodyPointerUpEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('yjs-bodies') || 'yjs-bodies', this.yjsBodiesEventListener)
   }
 
 
@@ -207,7 +213,7 @@ export default class MatterElement extends HTMLElement {
       Number(webComponent.getAttribute('height')),
       // @ts-ignore
       {
-        oid: webComponent.getAttribute('oid') || '',
+        bid: webComponent.getAttribute('bid') || '',
         uid: webComponent.getAttribute('uid') || '',
         restitution: webComponent.getAttribute('restitution') || 0.6,
         friction: webComponent.getAttribute('friction') || 0.1,
@@ -216,5 +222,28 @@ export default class MatterElement extends HTMLElement {
         collisions: []
       }
     ]
+  }
+
+  /**
+   * The namespace is prepended to the custom event names
+   * priority of value appliance: options, attribute
+   *
+   * @param {string} value
+   */
+  set namespace (value) {
+    if (value) this.setAttribute('namespace', value)
+  }
+
+  /**
+   * @return {string}
+   */
+  get namespace () {
+    // @ts-ignore
+    return this.getAttribute('namespace')
+  }
+
+  get globalEventTarget () {
+    // @ts-ignore
+    return this._globalEventTarget || (this._globalEventTarget = self.Environment?.activeRoute || document.body)
   }
 }

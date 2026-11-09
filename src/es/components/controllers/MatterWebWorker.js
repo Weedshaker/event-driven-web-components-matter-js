@@ -52,7 +52,7 @@ export default class MatterWebWorker {
           angularVelocity: body.angularVelocity,
           position: body.position,
           velocity: body.velocity,
-          oid: body.oid,
+          bid: body.bid,
           uid: body.uid,
           isStatic: body.isStatic,
           isSleeping: body.isSleeping,
@@ -66,26 +66,26 @@ export default class MatterWebWorker {
         const { bodyA, bodyB } = pair
         if (bodyA.isSensor || bodyB.isSensor) continue
         bodyA.collisions.unshift({
-          oid: bodyB.oid,
+          bid: bodyB.bid,
           uid: bodyB.uid,
           isGround: pair.collision.normal.y < -0.5
         })
         bodyB.collisions.unshift({
-          oid: bodyA.oid,
+          bid: bodyA.bid,
           uid: bodyA.uid,
           isGround: pair.collision.normal.y > 0.5
         })
       }
     })
-    const spliceCollision = (collisions, oid) => {
-      const index = collisions.findIndex(collision => collision.oid === oid)
+    const spliceCollision = (collisions, bid) => {
+      const index = collisions.findIndex(collision => collision.bid === bid)
       if (index !== -1) collisions.splice(index, 1)
     }
     Matter.Events.on(this.engine, 'collisionEnd', event => {
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair
-        spliceCollision(bodyA.collisions, bodyB.oid)
-        spliceCollision(bodyB.collisions, bodyA.oid)
+        spliceCollision(bodyA.collisions, bodyB.bid)
+        spliceCollision(bodyB.collisions, bodyA.bid)
         if (bodyA.isSleeping && !bodyA.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(bodyA, false)
         if (bodyB.isSleeping && !bodyB.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(bodyB, false)
       }
@@ -99,7 +99,7 @@ export default class MatterWebWorker {
         if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)
       })
       Matter.Composite.add(this.engine.world, body)
-      this.oidToMatterIdMap.set(event.data.oid, body.id)
+      this.oidToMatterIdMap.set(event.data.bid, body.id)
     }
 
     // TODO: on remove also remove this body as a collision!
@@ -129,8 +129,8 @@ export default class MatterWebWorker {
     switch (event.data.type) {
       case 'yjsBodies':
         event.data.bodies.forEach(yjsBody => {
-          if (this.oidToMatterIdMap.has(yjsBody.oid)) this.beforeUpdateFuncs.push(() => {
-            const body = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(yjsBody.oid), 'body')
+          if (this.oidToMatterIdMap.has(yjsBody.bid)) this.beforeUpdateFuncs.push(() => {
+            const body = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(yjsBody.bid), 'body')
             if (!body) return null
             if (body.angle !== yjsBody.angle) Matter.Body.setAngle(body, yjsBody.angle)
             if (body.angularVelocity !== yjsBody.angularVelocity) Matter.Body.setAngularVelocity(body, yjsBody.angularVelocity)
@@ -147,7 +147,7 @@ export default class MatterWebWorker {
         break
       case 'bodyPointerDown':
         if (this.dragConstraint) Matter.Composite.remove(this.engine.world, this.dragConstraint)
-        const bodyA = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(event.data.oid), 'body')
+        const bodyA = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(event.data.bid), 'body')
         if (!bodyA) return
         this.dragConstraint = Matter.Constraint.create({
           bodyA,

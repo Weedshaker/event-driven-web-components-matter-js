@@ -1,7 +1,45 @@
 <!DOCTYPE html>
-<html lang=en>
+<html lang="en">
+<!-- websocket: http://localhost:4500/src/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fheroku.decentral.ninja%2F%3Fkeep-alive%3D0 -->
+<!-- websocket: http://localhost:4500/src/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fwebsocket.peerweb.site%2F%3Fkeep-alive%3D0 -->
+<!-- webrtc: http://localhost:4500/src/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-two.peerweb.site%2F -->
+<!-- webrtc trystero: http://localhost:4500/src/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-trystero.ninja%2F -->
+<!-- https://www.brm.io/matter-js/ -->
 <head>
-  <meta http-equiv=refresh content="0; url=./src">
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>event-driven-web-components-matter-js</title>
 </head>
-<body></body>
+<body data-width="950" data-height="400">
+  <c-event-driven-yjs no-blur>
+    <c-bodies>
+      <c-matter>
+        <b-rectangle x=50 y=0 width=50 height=50 self background="green"></b-rectangle>
+        <b-rectangle x=100 y=0 width=50 height=50 background="red" bid="some-object-uid-999-888-567"></b-rectangle>
+        <b-rectangle x=0 y=350 width=950 height=50 background=darkblue is-static=true cursor=normal></b-rectangle>
+      </c-matter>
+    </c-bodies>
+  </c-event-driven-yjs>
+  <style>
+    body {
+      margin: 0;
+      height: attr(data-height px, 800px);
+      width: attr(data-width px, 600px);
+    }
+  </style>
+  <script rel=preload type=module>
+    // TODO: testing trystero: http://localhost:4500/src/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-trystero.ninja%2F which requires that object, fix and remove
+    self.Environment = {trackers: []}
+    Promise.all([
+      // Helpers
+      import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
+      import('./src/es/components/bodies/Rectangle.js').then(module => ['b-rectangle', module.default]),
+      import('./src/es/event-driven-web-components-yjs/src/es/EventDrivenYjs.js').then(module => ['c-event-driven-yjs', module.EventDrivenYjs()]),
+      import('./src/es/components/controllers/Bodies.js').then(module => ['c-bodies', module.default]),
+    ]).then(elements => elements.forEach(element => {
+      // don't define already existing customElements
+      if (element && !customElements.get(element[0])) customElements.define(...element)
+    }))
+  </script>
+</body>
 </html>

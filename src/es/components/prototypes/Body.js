@@ -4,22 +4,31 @@
 import { Intersection } from './Intersection.js'
 
 /**
- * Shape is a helper for any type of body
+ * Body is the web component container for any type of html content and reflecting the physics of matter.js
+ * Web Component Body does:
+ *  - command class Matter regarding physics (../controllers/Matter.js) by dispatching Events: matter-add-body, matter-remove-body
+ *  - command class Matter regarding physics drag (../controllers/Matter.js) by dispatching Events: wc-body-pointer-down, wc-body-pointer-move, wc-body-pointer-up
+ *  - command class Bodies regarding yjs CRDT synchronization (../controllers/Bodies.js) by dispatching Events: yjs-set-body, yjs-remove-body
+ *  - reflect physics from Event: matter-bodies, dispatched by class Matter (../controllers/Matter.js), through CSS by the matter-body coordinates (transform: translate3d(x, y, rotate))
  *
  * @export
- * @function Shape
+ * @function Body
  * @param {CustomElementConstructor} ChosenHTMLElement
  * @return {CustomElementConstructor | *}
  */
-export class Shape extends Intersection() {
+export class Body extends Intersection() {
   static get observedAttributes () {
     return ['is-static', 'width', 'height']
   }
 
-  constructor (oid, ...args) {
+  constructor (options = { namespace: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
-    if (oid || !this.hasAttribute('oid')) this.setAttribute('oid', oid || `b_${self.crypto.randomUUID()}`)
+    // set attribute namespace
+    if (options.namespace) this.namespace = options.namespace
+    else if (!this.namespace) this.namespace = 'wc-body-'
+
+    if (options.bid || !this.hasAttribute('bid')) this.setAttribute('bid', options.bid || `b_${self.crypto.randomUUID()}`)
     this.yjsBody = {}
     this.isIntersecting = this.hasAttribute('self')
 
@@ -29,7 +38,7 @@ export class Shape extends Intersection() {
 
     this.matterBodiesEventListener = event => {
       let body
-      if ((body = event.detail.bodies.find(body => body.oid === this.getAttribute('oid')))) {
+      if ((body = event.detail.bodies.find(body => body.bid === this.getAttribute('bid')))) {
         this.body = body
         const sleepingChanged = this.getAttribute('is-sleeping') !== String(body.isSleeping)
         if (sleepingChanged) this.setAttribute('is-sleeping', body.isSleeping)
@@ -55,7 +64,7 @@ export class Shape extends Intersection() {
                 angularVelocity: body.angularVelocity,
                 position: body.position,
                 velocity: body.velocity,
-                oid: this.getAttribute('oid') || body.oid || '',
+                bid: this.getAttribute('bid') || body.bid || '',
                 uid: this.getAttribute('uid') || body.uid || '',
                 isStatic: this.isStatic() || body.isStatic || false,
                 isSleeping: body.isSleeping,
@@ -73,19 +82,19 @@ export class Shape extends Intersection() {
     }
 
     this.matterSleepStartEventListener = async event => {
-      //if (event.detail.body === await this.body) document.body.removeEventListener('matter-bodies', this.matterBodiesEventListener)
+      //if (event.detail.body === await this.body) this.globalEventTarget.removeEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
     }
     this.matterSleepEndEventListener = async event => {
-      //if (event.detail.body === await this.body) document.body.addEventListener('matter-bodies', this.matterBodiesEventListener)
+      //if (event.detail.body === await this.body) this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
     }
 
     this.yjsSelfUidEventListener = event => {
       // TODO: has uid === client controller shall be something more flexible for multiple bodies
       this.setAttribute('uid', event.detail.uid)
-      this.setAttribute('oid', event.detail.uid)
-      document.body.addEventListener('matter-bodies', this.matterBodiesEventListener)
+      this.setAttribute('bid', event.detail.uid)
+      this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
       // the dispatch must be after rendering
-      this.dispatchEvent(new CustomEvent(this.getAttribute('add-body') || 'add-body', {
+      this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
           webComponent: this
         },
@@ -98,7 +107,7 @@ export class Shape extends Intersection() {
     this.pointerdownEventListener = event => {
       if (!this.body) return
       this.setPointerCapture(event.pointerId)
-      this.dispatchEvent(new CustomEvent(this.getAttribute('body-pointer-down') || 'body-pointer-down', {
+      this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-down`, {
         detail: {
           webComponent: this,
           position: {x: event.clientX, y: event.clientY}
@@ -110,7 +119,7 @@ export class Shape extends Intersection() {
     }
     this.pointermoveEventListener = event => {
       if (!this.hasPointerCapture(event.pointerId)) return
-      this.dispatchEvent(new CustomEvent(this.getAttribute('body-pointer-move') || 'body-pointer-move', {
+      this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-move`, {
         detail: {
           position: {x: event.clientX, y: event.clientY}
         },
@@ -120,7 +129,7 @@ export class Shape extends Intersection() {
       }))
     }
     this.pointerupEventListener = event => {
-      this.dispatchEvent(new CustomEvent(this.getAttribute('body-pointer-up') || 'body-pointer-up', {
+      this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-up`, {
         bubbles: true,
         cancelable: true,
         composed: true
@@ -131,20 +140,20 @@ export class Shape extends Intersection() {
 
   connectedCallback () {
     if (this.shouldRenderCSS()) this.renderCSS()
-    document.body.addEventListener('matter-sleep-start', this.matterSleepStartEventListener)
-    document.body.addEventListener('matter-sleep-end', this.matterSleepEndEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
     // todo: needs to be self only and likely better uuid as additional info
     if (this.hasAttribute('self')) {
-      document.body.addEventListener('yjs-self-uid', this.yjsSelfUidEventListener)
+      this.globalEventTarget.addEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
     } else {
       super.connectedCallback()
       // TODO: Use other targets than document body, Environment.globalEventTarget or such...
-      document.body.addEventListener('matter-bodies', this.matterBodiesEventListener)
+      this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
       // the dispatch must be after rendering
-      this.dispatchEvent(new CustomEvent(this.getAttribute('add-body') || 'add-body', {
+      this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
           webComponent: this
         },
@@ -157,7 +166,7 @@ export class Shape extends Intersection() {
 
   disconnectedCallback () {
     // must be dispatched from body, since this element dies before it can dispatch
-    document.body.dispatchEvent(new CustomEvent(this.getAttribute('remove-body') || 'remove-body', {
+    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
       detail: {
         webComponent: this
       },
@@ -169,18 +178,18 @@ export class Shape extends Intersection() {
       detail: {
         body: {
           isSelf: this.hasAttribute('self'),
-          oid: this.getAttribute('oid') || ''
+          bid: this.getAttribute('bid') || ''
         }
       },
       bubbles: true,
       cancelable: true,
       composed: true
     }))
-    document.body.removeEventListener('matter-bodies', this.matterBodiesEventListener)
-    document.body.removeEventListener('matter-sleep-start', this.matterSleepStartEventListener)
-    document.body.removeEventListener('matter-sleep-end', this.matterSleepEndEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
+    this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
     if (this.hasAttribute('self')) {
-      document.body.removeEventListener('yjs-self-uid', this.yjsSelfUidEventListener)
+      this.globalEventTarget.removeEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
@@ -265,5 +274,28 @@ export class Shape extends Intersection() {
           return style
         })())
     )
+  }
+
+  /**
+   * The namespace is prepended to the custom event names
+   * priority of value appliance: options, attribute
+   *
+   * @param {string} value
+   */
+  set namespace (value) {
+    if (value) this.setAttribute('namespace', value)
+  }
+
+  /**
+   * @return {string}
+   */
+  get namespace () {
+    // @ts-ignore
+    return this.getAttribute('namespace')
+  }
+
+  get globalEventTarget () {
+    // @ts-ignore
+    return this._globalEventTarget || (this._globalEventTarget = self.Environment?.activeRoute || document.body)
   }
 }

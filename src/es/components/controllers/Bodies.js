@@ -17,10 +17,10 @@ export default class Bodies extends WebWorker() {
     else if (!this.namespace) this.namespace = 'yjs-'
 
     this.awarenessChangeEventListenerOnce = event => {
-      document.body.removeEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce)
-      document.body.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
-      document.body.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
-      document.body.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
+      this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce)
+      this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
+      this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
+      this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
       this.awarenessChangeEventListenerOnce = () => {}
       this.uidResolve(`b_${JSON.parse(event.detail.uid).uuid}`)
     }
@@ -61,7 +61,7 @@ export default class Bodies extends WebWorker() {
       const body = event.detail.body
       let uid
       if (event.detail.isSelf) {
-        bodyEvents.set(body.uid || body.oid, body)
+        bodyEvents.set(body.uid || body.bid, body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       } else if (
         (uid = await this.uid) && (
@@ -75,7 +75,7 @@ export default class Bodies extends WebWorker() {
           uid,
           timestamp: Date.now()
         }
-        bodyEvents.set(body.uid || body.oid, body)
+        bodyEvents.set(body.uid || body.bid, body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       }
     }
@@ -95,7 +95,7 @@ export default class Bodies extends WebWorker() {
       if (!event.detail.isSelf) return
       const yMap = (await this.yMap).type
       // TODO: add remove capabilities
-      //yMap.remove(event.detail.body.uid || event.detail.body.oid)
+      //yMap.remove(event.detail.body.uid || event.detail.body.bid)
     }
 
     /** @type {(any)=>void} */
@@ -118,13 +118,13 @@ export default class Bodies extends WebWorker() {
   }
 
   connectedCallback () {
-    document.body.addEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce, {once: true})
-    document.body.addEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce, {once: true})
-    document.body.addEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
-    document.body.addEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
-    document.body.addEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
-    document.body.addEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
-    document.body.addEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce, {once: true})
+    this.globalEventTarget.addEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce, {once: true})
+    this.globalEventTarget.addEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
+    this.globalEventTarget.addEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
+    this.globalEventTarget.addEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
     if (this.isConnected) this.connectedCallbackOnce()
   }
 
@@ -145,13 +145,13 @@ export default class Bodies extends WebWorker() {
   }
 
   disconnectedCallback () {
-    document.body.removeEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce)
-    document.body.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
-    document.body.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
-    document.body.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
-    document.body.removeEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
-    document.body.removeEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
-    document.body.removeEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce)
+    this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
+    this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
+    this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
+    this.globalEventTarget.removeEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
   }
 
   /**
@@ -170,5 +170,10 @@ export default class Bodies extends WebWorker() {
   get namespace () {
     // @ts-ignore
     return this.getAttribute('namespace')
+  }
+
+  get globalEventTarget () {
+    // @ts-ignore
+    return this._globalEventTarget || (this._globalEventTarget = self.Environment?.activeRoute || document.body)
   }
 }

@@ -1,5 +1,5 @@
 // @ts-check
-import { Shape } from '../prototypes/Shape.js'
+import { Body } from '../prototypes/Body.js'
 
 /* global CustomEvent */
 
@@ -12,6 +12,6 @@ import { Shape } from '../prototypes/Shape.js'
 * @class Rectangle
 * @type {CustomElementConstructor}
 */
-export default class Rectangle extends Shape {
-  // TODO: Other shapes and settings at Matter.js
+export default class Rectangle extends Body {
+  // TODO: Other bodys and settings at Matter.js
 }
