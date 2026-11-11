@@ -86,6 +86,7 @@ export class Body extends Intersection() {
           this.doOnIntersection = () => {
             this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
               detail: {
+                /** @type {import('../controllers/Bodies.js').YjsBody} */
                 body: {
                   angle: body.angle,
                   angularVelocity: body.angularVelocity,
@@ -96,8 +97,7 @@ export class Body extends Intersection() {
                   isStatic: this.isStatic() || body.isStatic || false,
                   isSleeping: body.isSleeping,
                   collisions: body.collisions
-                },
-                isSelf: this.hasAttribute('self')
+                }
               },
               bubbles: true,
               cancelable: true,

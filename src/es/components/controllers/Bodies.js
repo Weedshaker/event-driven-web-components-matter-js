@@ -77,14 +77,15 @@ export default class Bodies extends WebWorker() {
       // TODO: also sync static bodies
       // TODO: make this more flexible with ctrl. when !event.detail.isSelf && event.detail.body.uid don't just not treat it but make it smarter through ctrl
       // don't deal with other user bodies as well as with static bodies
-      if (!event.detail.isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
-      let uid, key, yjsBody
-      if (event.detail.isSelf) {
+      const uid = await this.uid
+      const isSelf = uid === event.detail.body.uid
+      if (!isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
+      let key, yjsBody
+      if (isSelf) {
         bodyTransactions.set(event.detail.body.uid || event.detail.body.bid, event.detail.body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       } else if (
-        (uid = await this.uid)
-        && (key = event.detail.body.uid || event.detail.body.bid)
+        (key = event.detail.body.uid || event.detail.body.bid)
         && (
         !(await this.yMap).type.has(key)
         || !(yjsBody = (await this.yMap).type.get(key)).ctrl
@@ -113,7 +114,8 @@ export default class Bodies extends WebWorker() {
 
     this.removeBodyEventListener = async event => {
       // TODO: Decide how to handle !isSelf elements
-      if (!event.detail.isSelf) return
+      const isSelf = await this.uid === event.detail.body.uid
+      if (!isSelf) return
       const yMap = (await this.yMap).type
       // TODO: add remove capabilities
       //yMap.remove(event.detail.body.uid || event.detail.body.bid)
