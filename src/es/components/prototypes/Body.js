@@ -105,6 +105,7 @@ export class Body extends Intersection() {
             }))
             this.doOnIntersection = null
           }
+          // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
           if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
         }
       }
