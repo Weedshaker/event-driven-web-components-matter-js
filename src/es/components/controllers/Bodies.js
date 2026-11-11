@@ -15,7 +15,7 @@
     bid: string,
     uid: string | undefined,
     isGround: boolean
-  }
+  }[]
 }} YjsBody
 */
 
