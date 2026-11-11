@@ -173,7 +173,6 @@ export default class MatterElement extends HTMLElement {
           // @ts-ignore
           resolveWebComponent(webComponent)
         }
-        webComponent.yjsBody = yjsBody
       })
       this.worker.postMessage({
         type: 'yjsBodies',

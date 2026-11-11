@@ -1,5 +1,24 @@
 // @ts-check
 
+/**
+ * initial local state field user
+ @typedef {{
+  angle: number,
+  angularVelocity: number,
+  position: {x: number, y: number},
+  velocity: { x: number, y: number },
+  bid: string,
+  uid: string | '',
+  isStatic: boolean,
+  isSleeping: boolean,
+  collisions: {
+    bid: string,
+    uid: string | undefined,
+    isGround: boolean
+  }
+}} YjsBody
+*/
+
 import { WebWorker } from '../prototypes/WebWorker.js'
 
 export default class Bodies extends WebWorker() {
@@ -52,41 +71,43 @@ export default class Bodies extends WebWorker() {
     }
 
     /** @type {Map<string, any>} */
-    const bodyEvents = new Map()
+    const bodyTransactions = new Map()
     let animationFrameId = null
     this.setBodyEventListener = async event => {
       // TODO: also sync static bodies
+      // TODO: make this more flexible with ctrl. when !event.detail.isSelf && event.detail.body.uid don't just not treat it but make it smarter through ctrl
       // don't deal with other user bodies as well as with static bodies
       if (!event.detail.isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
-      const body = event.detail.body
-      let uid
+      let uid, key, yjsBody
       if (event.detail.isSelf) {
-        bodyEvents.set(body.uid || body.bid, body)
+        bodyTransactions.set(event.detail.body.uid || event.detail.body.bid, event.detail.body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       } else if (
-        (uid = await this.uid) && (
-        !event.detail.webComponent.yjsBody.ctrl
-        || event.detail.webComponent.yjsBody.ctrl.uid === uid
-        || await this.webWorker(detectCollision, body.collisions, uid, event.detail.webComponent.yjsBody.ctrl.uid)
-        || event.detail.webComponent.yjsBody.ctrl.timestamp + 1000 < Date.now()
+        (uid = await this.uid)
+        && (key = event.detail.body.uid || event.detail.body.bid)
+        && (
+        !(await this.yMap).type.has(key)
+        || !(yjsBody = (await this.yMap).type.get(key)).ctrl
+        || yjsBody.ctrl.uid === uid
+        || await this.webWorker(detectCollision, event.detail.body.collisions, uid, yjsBody.ctrl.uid)
+        || yjsBody.ctrl.timestamp + 1000 < Date.now()
       )) {
         // all bodies without a uid
-        event.detail.webComponent.yjsBody.ctrl = body.ctrl = {
+        bodyTransactions.set(key, {...event.detail.body, ctrl: {
           uid,
           timestamp: Date.now()
-        }
-        bodyEvents.set(body.uid || body.bid, body)
+        }})
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       }
     }
-    const detectCollision = (collisions, selfUid, otherUid) => {
-      return (collisions.some(collision => collision.uid === selfUid) && collisions.every(collision => collision.uid !== otherUid))
+    const detectCollision = (collisions, selfUid, ctrlUid) => {
+      return (collisions.some(collision => collision.uid === selfUid) && collisions.every(collision => collision.uid !== ctrlUid))
     }
     const _setBody = async () => {
-      if (!bodyEvents.size) return
+      if (!bodyTransactions.size) return
       const {type: yMap, doc} = await this.yMap
-      doc.transact(() => Array.from(bodyEvents).forEach(([key, value]) => yMap.set(key, value)))
-      bodyEvents.clear()
+      doc.transact(() => Array.from(bodyTransactions).forEach(([key, body]) => yMap.set(key, body)))
+      bodyTransactions.clear()
       animationFrameId = null
     }
 

@@ -1,7 +1,15 @@
 // @ts-check
 /* global self */
 
-import { Intersection } from './Intersection.js'
+/**
+ * Constructor options
+ @typedef {{
+  namespace?: string,
+  bid?: string // every class is going to possess a unique bid
+ }} options
+*/
+
+import { Intersection } from './Intersection.js' // new IntersectionObserver controlling attribute 'intersecting'
 
 /**
  * Body is the web component container for any type of html content and reflecting the physics of matter.js
@@ -18,20 +26,37 @@ import { Intersection } from './Intersection.js'
  */
 export class Body extends Intersection() {
   static get observedAttributes () {
-    return ['is-static', 'width', 'height']
+    return [
+      'height', // number (required for 'rectangle' and 'trapezoid')
+      'is-static', // boolean by hasAttribute
+      'radius', // number (required for 'circle' and 'polygon')
+      'sides', // number (required for 'polygon')
+      'slope', // number (required for 'trapezoid')
+      'type', // ['circle', 'polygon', 'rectangle', 'trapezoid']
+      'width', // number (required for 'rectangle' and 'trapezoid')
+      'x', // number (position coordinate)
+      'y' // number (position coordinate)
+    ]
   }
-
-  constructor (options = { namespace: undefined }, ...args) {
+  
+  /**
+   * Creates an instance of Body. The constructor will be called for every custom element using this class when initially created.
+   *
+   * @param {options} [options = {namespace=undefined, bid=undefined}]
+   * @param {*} args
+   */
+  constructor (options = { namespace: undefined, bid: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
     // set attribute namespace
     if (options.namespace) this.namespace = options.namespace
     else if (!this.namespace) this.namespace = 'wc-body-'
 
-    if (options.bid || !this.hasAttribute('bid')) this.setAttribute('bid', options.bid || `b_${self.crypto.randomUUID()}`)
-    this.yjsBody = {}
-    this.isIntersecting = this.hasAttribute('self')
+    // unique body id used to identify at yjs and matter.js
+    if (options.bid) this.bid = options.bid
+    else if (!this.bid) this.bid = `b_${self.crypto.randomUUID()}`
 
+    // TODO: do renderHTML
     this.html = this.customStyle
     this.copyPropertiesToAttributes()
     const accuracy = this.hasAttribute('accuracy') ? Number(this.hasAttribute('accuracy')) : 2
@@ -55,28 +80,31 @@ export class Body extends Intersection() {
           }
         `
         if (sleepingChanged || textContent !== this.customStyle.textContent) {
-          this.customStyle.textContent = textContent
-          if (this.isIntersecting) this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
-            detail: {
-              webComponent: this,
-              body: {
-                angle: body.angle,
-                angularVelocity: body.angularVelocity,
-                position: body.position,
-                velocity: body.velocity,
-                bid: this.getAttribute('bid') || body.bid || '',
-                uid: this.getAttribute('uid') || body.uid || '',
-                isStatic: this.isStatic() || body.isStatic || false,
-                isSleeping: body.isSleeping,
-                collisions: body.collisions
+          this.doOnIntersection = () => {
+            this.customStyle.textContent = textContent
+            this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
+              detail: {
+                body: {
+                  angle: body.angle,
+                  angularVelocity: body.angularVelocity,
+                  position: body.position,
+                  velocity: body.velocity,
+                  bid: this.getAttribute('bid') || body.bid || '',
+                  uid: this.getAttribute('uid') || body.uid || '',
+                  isStatic: this.isStatic() || body.isStatic || false,
+                  isSleeping: body.isSleeping,
+                  collisions: body.collisions
+                },
+                isSelf: this.hasAttribute('self'),
+                isIntersecting: true
               },
-              isSelf: this.hasAttribute('self'),
-              isIntersecting: this.isIntersecting
-            },
-            bubbles: true,
-            cancelable: true,
-            composed: true
-          }))
+              bubbles: true,
+              cancelable: true,
+              composed: true
+            }))
+            this.doOnIntersection = null
+          }
+          if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
         }
       }
     }
@@ -208,7 +236,12 @@ export class Body extends Intersection() {
   }
 
   intersectionCallback (entries, observer) {
-    this.isIntersecting = this.areEntriesIntersecting(entries)
+    if (this.areEntriesIntersecting(entries)) {
+      this.setAttribute('intersecting', '')
+      if (this.doOnIntersection) this.doOnIntersection()
+      return
+    }
+    this.removeAttribute('intersecting')
   }
 
   /**
@@ -231,6 +264,12 @@ export class Body extends Intersection() {
         -webkit-user-drag: none;
         user-select: none;
       }
+      /** TODO: save rendering analog dialog key, user, provider,... */
+      /*
+      :host(:not([intersecting]):not([self])) {
+        display: none;
+      }
+        */
       :host {
         background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
         height: ${this.getAttribute('height') ? this.getAttribute('height') + 'px' : '5px'};
@@ -292,6 +331,23 @@ export class Body extends Intersection() {
   get namespace () {
     // @ts-ignore
     return this.getAttribute('namespace')
+  }
+
+  /**
+   * The body id (bid) is the unique reference for this body used throughout the whole application from yjs CRDT until matter.js
+   *
+   * @param {string} value
+   */
+  set bid (value) {
+    if (value) this.setAttribute('bid', value)
+  }
+
+  /**
+   * @return {string}
+   */
+  get bid () {
+    // @ts-ignore
+    return this.getAttribute('bid')
   }
 
   get globalEventTarget () {
