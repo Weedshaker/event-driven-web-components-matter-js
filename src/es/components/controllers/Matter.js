@@ -91,14 +91,14 @@ export default class MatterElement extends HTMLElement {
     }
     const _dispatchEvent = () => {
       if (!bodies) return
-      this.dispatchEvent(new CustomEvent(`${this.namespace}bodies`, {
+      bodies.forEach(body => this.dispatchEvent(new CustomEvent(`${this.namespace}body-${body.bid}`, {
         detail: {
-          bodies
+          body
         },
         bubbles: true,
         cancelable: true,
         composed: true
-      }))
+      })))
       bodies = null
       animationFrameId = null
     }

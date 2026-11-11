@@ -5,7 +5,8 @@
  * Constructor options
  @typedef {{
   namespace?: string,
-  bid?: string // every class is going to possess a unique bid
+  bid?: string // every class is going to possess a unique bid,
+  accuracy?: number
  }} options
 */
 
@@ -45,7 +46,7 @@ export class Body extends Intersection() {
    * @param {options} [options = {namespace=undefined, bid=undefined}]
    * @param {*} args
    */
-  constructor (options = { namespace: undefined, bid: undefined }, ...args) {
+  constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
     // set attribute namespace
@@ -56,14 +57,15 @@ export class Body extends Intersection() {
     if (options.bid) this.bid = options.bid
     else if (!this.bid) this.bid = `b_${self.crypto.randomUUID()}`
 
-    // TODO: do renderHTML
-    this.html = this.customStyle
-    this.copyPropertiesToAttributes()
-    const accuracy = this.hasAttribute('accuracy') ? Number(this.hasAttribute('accuracy')) : 2
+    // The accuracy for the css number values at transform translate3d toFixed
+    let accuracy = 0
+    if (options.accuracy) accuracy = options.accuracy
+    else if (!accuracy) accuracy = 2
 
-    this.matterBodiesEventListener = event => {
+    // TODO: continue here...
+    this.matterBodyEventListener = event => {
       let body
-      if ((body = event.detail.bodies.find(body => body.bid === this.getAttribute('bid')))) {
+      if (body = event.detail.body) {
         this.body = body
         const sleepingChanged = this.getAttribute('is-sleeping') !== String(body.isSleeping)
         if (sleepingChanged) this.setAttribute('is-sleeping', body.isSleeping)
@@ -80,8 +82,8 @@ export class Body extends Intersection() {
           }
         `
         if (sleepingChanged || textContent !== this.customStyle.textContent) {
+          this.customStyle.textContent = textContent
           this.doOnIntersection = () => {
-            this.customStyle.textContent = textContent
             this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
               detail: {
                 body: {
@@ -89,14 +91,13 @@ export class Body extends Intersection() {
                   angularVelocity: body.angularVelocity,
                   position: body.position,
                   velocity: body.velocity,
-                  bid: this.getAttribute('bid') || body.bid || '',
+                  bid: this.bid,
                   uid: this.getAttribute('uid') || body.uid || '',
                   isStatic: this.isStatic() || body.isStatic || false,
                   isSleeping: body.isSleeping,
                   collisions: body.collisions
                 },
-                isSelf: this.hasAttribute('self'),
-                isIntersecting: true
+                isSelf: this.hasAttribute('self')
               },
               bubbles: true,
               cancelable: true,
@@ -110,17 +111,17 @@ export class Body extends Intersection() {
     }
 
     this.matterSleepStartEventListener = async event => {
-      //if (event.detail.body === await this.body) this.globalEventTarget.removeEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+      //if (event.detail.body === await this.body) this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     }
     this.matterSleepEndEventListener = async event => {
-      //if (event.detail.body === await this.body) this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+      //if (event.detail.body === await this.body) this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     }
 
     this.yjsSelfUidEventListener = event => {
       // TODO: has uid === client controller shall be something more flexible for multiple bodies
       this.setAttribute('uid', event.detail.uid)
       this.setAttribute('bid', event.detail.uid)
-      this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+      this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
       // the dispatch must be after rendering
       this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
@@ -168,6 +169,7 @@ export class Body extends Intersection() {
 
   connectedCallback () {
     if (this.shouldRenderCSS()) this.renderCSS()
+    if (this.shouldRenderHTML()) this.renderHTML()
     this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
     this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
     // todo: needs to be self only and likely better uuid as additional info
@@ -179,7 +181,7 @@ export class Body extends Intersection() {
     } else {
       super.connectedCallback()
       // TODO: Use other targets than document body, Environment.globalEventTarget or such...
-      this.globalEventTarget.addEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+      this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
       // the dispatch must be after rendering
       this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
@@ -206,14 +208,14 @@ export class Body extends Intersection() {
       detail: {
         body: {
           isSelf: this.hasAttribute('self'),
-          bid: this.getAttribute('bid') || ''
+          bid: this.bid
         }
       },
       bubbles: true,
       cancelable: true,
       composed: true
     }))
-    this.globalEventTarget.removeEventListener(this.getAttribute('matter-bodies') || 'matter-bodies', this.matterBodiesEventListener)
+    this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
     this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
     if (this.hasAttribute('self')) {
@@ -254,6 +256,15 @@ export class Body extends Intersection() {
   }
 
   /**
+   * evaluates if a render is necessary
+   *
+   * @return {boolean}
+   */
+  shouldRenderHTML () {
+    return !this.section
+  }
+
+  /**
   * renders the css
   *
   * @return {void}
@@ -264,20 +275,8 @@ export class Body extends Intersection() {
         -webkit-user-drag: none;
         user-select: none;
       }
-      /** TODO: save rendering analog dialog key, user, provider,... */
-      /*
-      :host(:not([intersecting]):not([self])) {
+      :host(:not([intersecting]):not([self])) > section {
         display: none;
-      }
-        */
-      :host {
-        background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
-        height: ${this.getAttribute('height') ? this.getAttribute('height') + 'px' : '5px'};
-        position: ${this.getAttribute('position') ? this.getAttribute('position') : 'var(--position, absolute)'};
-        width: ${this.getAttribute('width') ? this.getAttribute('width') + 'px' : '5px'};
-        transform-origin: center;
-        opacity: var(--opacity, 1);
-        transition: transform 50ms ease-out;
       }
       :host([self]) {
         cursor: ${this.getAttribute('cursor') ? this.getAttribute('cursor') : 'var(--cursor, move)'};
@@ -286,7 +285,30 @@ export class Body extends Intersection() {
       :host([is-sleeping=false]) {
         will-change: transform;
       }
+      :host {
+        position: ${this.getAttribute('position') ? this.getAttribute('position') : 'var(--position, absolute)'};
+        transform-origin: center;
+        opacity: var(--opacity, 1);
+        transition: transform 50ms ease-out;
+      }
+      :host, :host > section {
+        height: ${this.getAttribute('height') ? this.getAttribute('height') + 'px' : '5px'};
+        width: ${this.getAttribute('width') ? this.getAttribute('width') + 'px' : '5px'};
+      }
+      :host, :host > section {
+        background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
+      }
     `
+  }
+
+  /**
+   * Render HTML
+   * @returns Promise<void>
+   */
+  renderHTML () {
+    this.html = /* html */`<section></section>`
+    this.html = this.customStyle
+    this.copyPropertiesToAttributes()
   }
 
   copyPropertiesToAttributes () {
@@ -302,6 +324,10 @@ export class Body extends Intersection() {
    */
   isStatic () {
     return this.hasAttribute('is-static') && this.getAttribute('is-static') !== 'false'
+  }
+
+  get section () {
+    return this.root.querySelector('section')
   }
 
   get customStyle () {
@@ -348,6 +374,23 @@ export class Body extends Intersection() {
   get bid () {
     // @ts-ignore
     return this.getAttribute('bid')
+  }
+
+  /**
+   * The accuracy for the css number values at transform translate3d toFixed
+   *
+   * @param {string} value
+   */
+  set accuracy (value) {
+    if (value) this.setAttribute('accuracy', value)
+  }
+
+  /**
+   * @return {string}
+   */
+  get accuracy () {
+    // @ts-ignore
+    return this.getAttribute('accuracy')
   }
 
   get globalEventTarget () {
