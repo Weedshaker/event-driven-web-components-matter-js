@@ -65,9 +65,11 @@ export default class MatterWebWorker {
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair
         if (bodyA.isSensor || bodyB.isSensor) continue
+        // todo: add full collision info and adjust yjsbody interface
         bodyA.collisions.unshift({
           bid: bodyB.bid,
           uid: bodyB.uid,
+          // todo: is ground as func?
           isGround: pair.collision.normal.y < -0.5
         })
         bodyB.collisions.unshift({

@@ -4,9 +4,9 @@
 /**
  * Constructor options
  @typedef {{
-  namespace?: string,
+  namespace?: string, // namespace the events dispatched
   bid?: string // every class is going to possess a unique bid,
-  accuracy?: number
+  accuracy?: number // the fixedTo rounding on css transition values
  }} options
 */
 
@@ -28,12 +28,24 @@ import { Intersection } from './Intersection.js' // new IntersectionObserver con
 export class Body extends Intersection() {
   static get observedAttributes () {
     return [
+      'collision-filter-category', // controls collision categories, allowed collisions, and group-based collision overrides. default: { category: 0x0001, mask: 0xFFFFFFFF, group: 0 }
+      'collision-filter-group',
+      'collision-filter-mask',
+      'density', // a number that defines the density of the body (mass per unit area)
+      'friction', // a number that defines the friction of the body. The value is always positive and is in the range (0, 1)
+      'frictionAir', // a number that defines the air friction of the body (air resistance). A value of 0 means the body will never slow as it moves through space
+      'frictionStatic', // controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
       'height', // number (required for 'rectangle' and 'trapezoid')
+      'inertia', // how difficult it is for an object to rotate
+      'is-sensor', // a flag that indicates whether a body is a sensor. Sensor triggers collision events, but doesn't react with colliding body physically
       'is-static', // boolean by hasAttribute
+      'mass', // a number that defines the mass of the body
       'radius', // number (required for 'circle' and 'polygon')
+      'restitution', // a number that defines the restitution (elasticity) of the body. The value is always positive and is in the range (0, 1
       'sides', // number (required for 'polygon')
       'slope', // number (required for 'trapezoid')
-      'type', // ['circle', 'polygon', 'rectangle', 'trapezoid']
+      'timeScale', // controls the speed of time for an individual physics body
+      'type', // 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
       'width', // number (required for 'rectangle' and 'trapezoid')
       'x', // number (position coordinate)
       'y' // number (position coordinate)
@@ -49,7 +61,7 @@ export class Body extends Intersection() {
   constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
-    // set attribute namespace
+    // set attribute namespace // todo comment
     if (options.namespace) this.namespace = options.namespace
     else if (!this.namespace) this.namespace = 'wc-body-'
 
@@ -62,7 +74,7 @@ export class Body extends Intersection() {
     if (options.accuracy) accuracy = options.accuracy
     else if (!accuracy) accuracy = 2
 
-    // TODO: continue here...
+    // TODO: continue here... check how to deal with sleeping
     this.matterBodyEventListener = event => {
       let body
       if (body = event.detail.body) {
@@ -84,9 +96,10 @@ export class Body extends Intersection() {
         if (sleepingChanged || textContent !== this.customStyle.textContent) {
           this.customStyle.textContent = textContent
           this.doOnIntersection = () => {
+            // todo: yjsbody comes from matter
             this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
               detail: {
-                /** @type {import('../controllers/Bodies.js').YjsBody} */
+                /** @type {import('../controllers/YjsBodies.js').YjsBodyTick} */
                 body: {
                   angle: body.angle,
                   angularVelocity: body.angularVelocity,
@@ -109,7 +122,7 @@ export class Body extends Intersection() {
           if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
         }
       }
-    }
+    }// todo: how does phaser solve matter world size/walls?
 
     this.matterSleepStartEventListener = async event => {
       //if (event.detail.body === await this.body) this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
@@ -119,6 +132,7 @@ export class Body extends Intersection() {
     }
 
     this.yjsSelfUidEventListener = event => {
+      // todo: received uid equals attr uid === self
       // TODO: has uid === client controller shall be something more flexible for multiple bodies
       this.setAttribute('uid', event.detail.uid)
       this.setAttribute('bid', event.detail.uid)
@@ -135,7 +149,6 @@ export class Body extends Intersection() {
     }
 
     this.pointerdownEventListener = event => {
-      if (!this.body) return
       this.setPointerCapture(event.pointerId)
       this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-down`, {
         detail: {
@@ -193,6 +206,7 @@ export class Body extends Intersection() {
         composed: true
       }))
     }
+    // TODO: https://www.brm.io/matter-js/docs/classes/Body.html#method_setParts set and unset parts. when setting parts first remove those part bodies from world, when unset then set them separately to world
   }
 
   disconnectedCallback () {

@@ -12,13 +12,13 @@
 </head>
 <body data-width="950" data-height="400">
   <c-event-driven-yjs no-blur>
-    <c-bodies>
+    <c-yjs-bodies>
       <c-matter>
         <b-rectangle x=50 y=0 width=50 height=50 self background="green"></b-rectangle>
         <b-rectangle x=100 y=0 width=50 height=50 background="red" bid="some-object-uid-999-888-567"></b-rectangle>
         <b-rectangle x=0 y=350 width=950 height=50 background=darkblue is-static=true cursor=normal></b-rectangle>
       </c-matter>
-    </c-bodies>
+    </c-yjs-bodies>
   </c-event-driven-yjs>
   <style>
     body {
@@ -35,7 +35,7 @@
       import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
       import('./src/es/components/bodies/Rectangle.js').then(module => ['b-rectangle', module.default]),
       import('./src/es/event-driven-web-components-yjs/src/es/EventDrivenYjs.js').then(module => ['c-event-driven-yjs', module.EventDrivenYjs()]),
-      import('./src/es/components/controllers/Bodies.js').then(module => ['c-bodies', module.default]),
+      import('./src/es/components/controllers/YjsBodies.js').then(module => ['c-yjs-bodies', module.default]),
     ]).then(elements => elements.forEach(element => {
       // don't define already existing customElements
       if (element && !customElements.get(element[0])) customElements.define(...element)

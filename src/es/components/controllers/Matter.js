@@ -4,6 +4,21 @@
 import Matter from '../../dependencies/matter.min.js'
 import MatterWebWorker from './MatterWebWorker.js'
 
+/**
+ * Collision category bitmasks for Matter.js bodies.
+ * Each category must use a unique power of two.
+ * @readonly
+ * @enum {number}
+ */
+export const CollisionCategory = {
+  DEFAULT: 0x0001,
+  PLAYER: 0x0002,
+  ENEMY: 0x0004,
+  PROJECTILE: 0x0008,
+  ENVIRONMENT: 0x0010,
+  ALL: 0xFFFFFFFF
+}
+
 /***
  * https://github.com/liabru/matter-js
  * https://brm.io/matter-js/docs/

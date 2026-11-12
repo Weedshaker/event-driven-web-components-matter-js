@@ -1,27 +1,53 @@
 // @ts-check
 
 /**
- * initial local state field user
+ * web component attribute controlled props
+ @typedef {{
+  bid: string,
+  collisionFilter: { category: import('./Matter.js').CollisionCategory, mask: import('./Matter.js').CollisionCategory, group: number },
+  density: number,
+  friction: number,
+  frictionAir: number,
+  frictionStatic: number,
+  height: number,
+  inertia: number,
+  isSensor: boolean, // TODO: double with YjsBodyTick
+  isStatic: boolean, // TODO: double with YjsBodyTick
+  mass: number,
+  position: {x: number, y: number},
+  radius: number,
+  restitution: number,
+  sides: number,
+  slope: number,
+  timeScale: number,
+  type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
+  uid: string | '',
+  width: number
+}} YjsBody
+*/
+
+/**
+ * matter.js per tick updated props
  @typedef {{
   angle: number,
   angularVelocity: number,
-  position: {x: number, y: number},
-  velocity: { x: number, y: number },
   bid: string,
-  uid: string | '',
-  isStatic: boolean,
-  isSleeping: boolean,
   collisions: {
     bid: string,
     uid: string | undefined,
     isGround: boolean
   }[]
-}} YjsBody
+  isSleeping: boolean,
+  isStatic: boolean,
+  position: {x: number, y: number},
+  uid: string | '',
+  velocity: { x: number, y: number }
+}} YjsBodyTick
 */
 
 import { WebWorker } from '../prototypes/WebWorker.js'
 
-export default class Bodies extends WebWorker() {
+export default class YjsBodies extends WebWorker() {
   /**
    * Creates an instance of yjs users. The constructor will be called for every custom element using this class when initially created.
    *
@@ -136,7 +162,7 @@ export default class Bodies extends WebWorker() {
 
     /** @type {(any)=>void} */
     this.yMapResolve = map => map
-    /** @type {Promise<{type: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs").Map, doc: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs").Doc}>} */
+    /** @type {Promise<{type: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs.js").Map, doc: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs.js").Doc}>} */
     this.yMap = new Promise(resolve => (this.yMapResolve = resolve))
   }
 
