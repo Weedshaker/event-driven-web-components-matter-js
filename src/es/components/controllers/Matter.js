@@ -184,6 +184,7 @@ export default class MatterElement extends HTMLElement {
 
     const webComponentMap = new Map()
     this.yjsBodiesEventListener = async event => {
+      // TODO: a separate controller as a factory for the web components is required
       const bodies = []
       event.detail.keys.forEach(async ({key, isSelf, getBody}) => {
         if (isSelf) return
@@ -192,7 +193,7 @@ export default class MatterElement extends HTMLElement {
         let webComponent
         if (webComponentMap.has(key)) {
           webComponent = await webComponentMap.get(key)
-        } else if ((webComponent = yjsBody.uid ? this.querySelector(`[uid="${yjsBody.uid}"]`) : this.querySelector(`[bid="${yjsBody.bid}"]`))) {
+        } else if ((webComponent = this.querySelector(`[bid="${yjsBody.bid}"]`))) {
           webComponentMap.set(key, Promise.resolve(webComponent))
         } else {
           let resolveWebComponent

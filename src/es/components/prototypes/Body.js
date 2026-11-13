@@ -116,8 +116,9 @@ export class Body extends Intersection() {
     }
     this.matterSleepEndEventListener = event => this.setAttribute('is-sleeping', 'false')
 
+    // TODO: get uid from awareness directly or implement user controller
     this.yjsSelfUidEventListener = event => {
-      // todo: received uid equals attr uid === self
+      // todo: received uid equals attr uid === self; rethink since self is less important than actively controlled body
       // TODO: has uid === client controller shall be something more flexible for multiple bodies
       this.setAttribute('uid', event.detail.uid)
       // the dispatch must be after rendering
