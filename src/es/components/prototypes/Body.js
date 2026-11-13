@@ -31,11 +31,14 @@ export class Body extends Intersection() {
       'collision-filter-category', // controls collision categories, allowed collisions, and group-based collision overrides. default: { category: 0x0001, mask: 0xFFFFFFFF, group: 0 }
       'collision-filter-group',
       'collision-filter-mask',
+      'data-height', // number (required for 'rectangle' and 'trapezoid')
+      'data-width', // number (required for 'rectangle' and 'trapezoid')
+      'data-x', // number (position coordinate)
+      'data-y', // number (position coordinate)
       'density', // a number that defines the density of the body (mass per unit area)
-      'friction', // a number that defines the friction of the body. The value is always positive and is in the range (0, 1)
       'friction-air', // a number that defines the air friction of the body (air resistance). A value of 0 means the body will never slow as it moves through space
       'friction-static', // controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
-      'height', // number (required for 'rectangle' and 'trapezoid')
+      'friction', // a number that defines the friction of the body. The value is always positive and is in the range (0, 1)
       'inertia', // how difficult it is for an object to rotate
       'is-sensor', // a flag that indicates whether a body is a sensor. Sensor triggers collision events, but doesn't react with colliding body physically
       'is-static', // boolean by hasAttribute
@@ -45,10 +48,7 @@ export class Body extends Intersection() {
       'sides', // number (required for 'polygon')
       'slope', // number (required for 'trapezoid')
       'timeScale', // controls the speed of time for an individual physics body
-      'type', // 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
-      'width', // number (required for 'rectangle' and 'trapezoid')
-      'x', // number (position coordinate)
-      'y' // number (position coordinate)
+      'type' // 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
     ]
   }
   
@@ -61,7 +61,7 @@ export class Body extends Intersection() {
   constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
-    // set attribute namespace // todo comment
+    // set attribute namespace
     if (options.namespace) this.namespace = options.namespace
     else if (!this.namespace) this.namespace = 'wc-body-'
 
@@ -70,56 +70,44 @@ export class Body extends Intersection() {
     else if (!this.bid) this.bid = `b_${self.crypto.randomUUID()}`
 
     // The accuracy for the css number values at transform translate3d toFixed
-    let accuracy = 0
-    if (options.accuracy) accuracy = options.accuracy
-    else if (!accuracy) accuracy = 2
+    if (options.accuracy) this.accuracy = options.accuracy
+    else if (!this.accuracy) this.accuracy = 2
 
     // update the css according to the matter.js physics. Also inform through yjs crdt about the changed state as well as when the body starts sleeping
-    this.matterBodyEventListener = (event, sleepingChanged = false) => {
-      let body
-      if (body = event.detail.body) {
-        /*
-        // NOTE: transform has better performance than top and left props
-        top: ${body.position.y - this.getAttribute('half-height')}px;
-        left: ${body.position.x - this.getAttribute('half-width')}px;
-        transform: rotate(${body.angle}rad);
-        */
-        // NOTE: translate3d is more likely to be handed to gpu than just translate
-        const textContent = /* css */`
-          :host {
-            transform: translate3d(${(body.position.x - this.getAttribute('half-width')).toFixed(accuracy)}px, ${(body.position.y - this.getAttribute('half-height')).toFixed(accuracy)}px, 0) rotate(${body.angle.toFixed(accuracy)}rad);
-          }
-        `
-        if (sleepingChanged || textContent !== this.customStyle.textContent) {
-          this.customStyle.textContent = textContent
-          this.doOnIntersection = () => {
-            // todo: yjsbody comes from matter
-            this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
-              detail: {
-                /** @type {import('../controllers/YjsBodies.js').YjsBodyTick} */
-                body: {
-                  angle: body.angle,
-                  angularVelocity: body.angularVelocity,
-                  position: body.position,
-                  velocity: body.velocity,
-                  bid: this.bid,
-                  uid: this.getAttribute('uid') || body.uid || '',
-                  isStatic: this.isStatic() || body.isStatic || false,
-                  isSleeping: body.isSleeping,
-                  collisions: body.collisions
-                }
-              },
-              bubbles: true,
-              cancelable: true,
-              composed: true
-            }))
-            this.doOnIntersection = null
-          }
-          // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
-          if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
+    this.matterBodyEventListener = (event, sleepStart = false) => {
+      const body = event.detail.body
+      let initiateDoOnIntersectionOnce = () => {
+        initiateDoOnIntersectionOnce = () => {}
+        this.doOnIntersection = () => {
+          this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
+            detail: {
+              /** @type {import('../controllers/YjsBodies.js').YjsBodyTick} */
+              body
+            },
+            bubbles: true,
+            cancelable: true,
+            composed: true
+          }))
+          this.doOnIntersection = null
         }
+        // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
+        if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
       }
-    }// todo: how does phaser solve matter world size/walls?
+      if (sleepStart) initiateDoOnIntersectionOnce()
+      /*
+      // NOTE: transform has better performance than top and left props
+      top: ${body.position.y - this.getAttribute('data-height-half')}px;
+      left: ${body.position.x - this.getAttribute('data-width-half')}px;
+      transform: rotate(${body.angle}rad);
+      */
+      // NOTE: translate3d is more likely to be handed to gpu than just translate
+      const textContent = /* css */`:host {transform: translate3d(${(body.position.x - this.getAttribute('data-width-half')).toFixed(this.accuracy)}px, ${(body.position.y - this.getAttribute('data-height-half')).toFixed(this.accuracy)}px, 0) rotate(${body.angle.toFixed(this.accuracy)}rad);}`
+      if (textContent !== this.customStyle.textContent) {
+        this.customStyle.textContent = textContent
+        initiateDoOnIntersectionOnce()
+      }
+      // TODO: inform children about const body
+    }
 
     // inform about the last change when body started sleeping
     this.matterSleepStartEventListener = event => {
@@ -241,9 +229,9 @@ export class Body extends Intersection() {
   attributeChangedCallback (name, oldValue, newValue) {
     if (name === 'is-static') {
       //this.body.then(body => (body.isStatic = this.isStatic()))
-    } else if (name === 'width' || name === 'height') {
-      this.setAttribute('half-width', this.getAttribute('width') / 2)
-      this.setAttribute('half-height', this.getAttribute('height') / 2)
+    } else if (name === 'data-width' || name === 'data-height') {
+      this.setAttribute('data-width-half', this.getAttribute('data-width') / 2)
+      this.setAttribute('data-height-half', this.getAttribute('data-height') / 2)
     }
   }
 
@@ -296,17 +284,18 @@ export class Body extends Intersection() {
         will-change: transform;
       }
       :host {
+        --height: attr(data-height px);
+        --width: attr(data-width px);
+        opacity: var(--opacity, 1);
         position: ${this.getAttribute('position') ? this.getAttribute('position') : 'var(--position, absolute)'};
         transform-origin: center;
-        opacity: var(--opacity, 1);
+        transform: translate3d(attr(data-x px), attr(data-y px), 0);
         transition: transform 50ms ease-out;
       }
-      :host, :host > section {
-        height: ${this.getAttribute('height') ? this.getAttribute('height') + 'px' : '5px'};
-        width: ${this.getAttribute('width') ? this.getAttribute('width') + 'px' : '5px'};
-      }
-      :host, :host > section {
+      :host > section {
         background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
+        height: var(--height);
+        width: var(--width);
       }
     `
   }
@@ -389,14 +378,14 @@ export class Body extends Intersection() {
   /**
    * The accuracy for the css number values at transform translate3d toFixed
    *
-   * @param {string} value
+   * @param {number} value
    */
   set accuracy (value) {
     if (value) this.setAttribute('accuracy', value)
   }
 
   /**
-   * @return {string}
+   * @return {number}
    */
   get accuracy () {
     // @ts-ignore

@@ -21,6 +21,7 @@
   slope: number,
   timeScale: number,
   type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid',
+  uid: string | '',
   width: number
 }} YjsBody
 */
@@ -35,7 +36,11 @@
     bid: string,
     uid: string | undefined,
     isGround: boolean
-  }[]
+  }[],
+  ctrl?: {
+    uid: string | '',
+    timestamp: number
+  },
   isSleeping: boolean,
   isStatic: boolean,
   position: {x: number, y: number},

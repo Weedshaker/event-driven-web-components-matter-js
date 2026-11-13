@@ -50,6 +50,7 @@ export default class MatterElement extends HTMLElement {
             scale: this.getAttribute('gravity-scale') || 0.001
         }
       },
+      // todo: how does phaser solve matter world size/walls?
       walls: {
         width: Number(this.globalEventTarget.getAttribute('data-width')) || 1600,
         height: Number(this.globalEventTarget.getAttribute('data-height')) || 1200
@@ -100,7 +101,22 @@ export default class MatterElement extends HTMLElement {
       switch (event.data.type) {
         case 'afterUpdate':
           bodies = event.data.bodies
-          if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _dispatchEvent())
+          if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => {
+            if (!bodies) return
+            bodies.forEach(body => {
+              if (!body.isSleeping && !body.isStatic) this.dispatchEvent(new CustomEvent(`${this.namespace}body-${body.bid}`, {
+                detail: {
+                  /** @type {import('./YjsBodies.js').YjsBodyTick} */
+                  body
+                },
+                bubbles: true,
+                cancelable: true,
+                composed: true
+              }))
+            })
+            bodies = null
+            animationFrameId = null
+          })
           break
         case 'sleepStart':
           this.dispatchEvent(new CustomEvent(`${this.namespace}sleep-start-body-${event.data.body.bid}`, {
@@ -123,19 +139,6 @@ export default class MatterElement extends HTMLElement {
           }))
           break
       }
-    }
-    const _dispatchEvent = () => {
-      if (!bodies) return
-      bodies.forEach(body => this.dispatchEvent(new CustomEvent(`${this.namespace}body-${body.bid}`, {
-        detail: {
-          body
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      })))
-      bodies = null
-      animationFrameId = null
     }
 
     this.addBodyEventListener = event => {
@@ -196,14 +199,14 @@ export default class MatterElement extends HTMLElement {
           webComponentMap.set(key, new Promise(resolve => (resolveWebComponent = resolve)))
           const module = await import(`${this.importMetaUrl}../bodies/Rectangle.js`)
           webComponent = new module.default
-          webComponent.setAttribute('x', yjsBody.position.x)
-          webComponent.setAttribute('y', yjsBody.position.y)
+          webComponent.setAttribute('data-x', yjsBody.position.x)
+          webComponent.setAttribute('data-y', yjsBody.position.y)
           webComponent.setAttribute('bid', yjsBody.bid)
           webComponent.setAttribute('uid', yjsBody.uid)
           webComponent.setAttribute('is-static', yjsBody.isStatic)
           // TODO: make dynamic width, height, shape
-          webComponent.setAttribute('width', '50')
-          webComponent.setAttribute('height', '50')
+          webComponent.setAttribute('data-width', '50')
+          webComponent.setAttribute('data-height', '50')
           this.appendChild(webComponent)
           // @ts-ignore
           resolveWebComponent(webComponent)
@@ -241,10 +244,10 @@ export default class MatterElement extends HTMLElement {
    */
   static getRectangle (webComponent) {
     return [
-      Number(webComponent.getAttribute('x')) + Number(webComponent.getAttribute('width')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
-      Number(webComponent.getAttribute('y')) + Number(webComponent.getAttribute('height')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
-      Number(webComponent.getAttribute('width')),
-      Number(webComponent.getAttribute('height')),
+      Number(webComponent.getAttribute('data-x')) + Number(webComponent.getAttribute('data-width')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
+      Number(webComponent.getAttribute('data-y')) + Number(webComponent.getAttribute('data-height')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
+      Number(webComponent.getAttribute('data-width')),
+      Number(webComponent.getAttribute('data-height')),
       // @ts-ignore
       {
         bid: webComponent.getAttribute('bid') || '',
