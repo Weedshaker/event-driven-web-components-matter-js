@@ -161,11 +161,10 @@ export default class MatterElement extends HTMLElement {
     }
 
     this.bodyPointerDownEventListener = event => {
-      let webComponent = null
-      if (event && event.detail && (webComponent = event.detail.webComponent)) {
+      if (event && event.detail && event.detail.bid) {
         this.worker.postMessage({
           type: 'bodyPointerDown',
-          bid: webComponent.getAttribute('bid') || '',
+          bid: event.detail.bid,
           position: event.detail.position
         })
       }

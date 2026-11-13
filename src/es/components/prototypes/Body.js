@@ -91,7 +91,7 @@ export class Body extends Intersection() {
           this.doOnIntersection = null
         }
         // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
-        if (this.hasAttribute('intersecting') || this.hasAttribute('self')) this.doOnIntersection()
+        if (this.hasAttribute('intersecting') || this.hasAttribute('self-controlled')) this.doOnIntersection()
       }
       if (sleepStart) initiateDoOnIntersectionOnce()
       /*
@@ -106,7 +106,6 @@ export class Body extends Intersection() {
         this.customStyle.textContent = textContent
         initiateDoOnIntersectionOnce()
       }
-      // TODO: inform children about const body
     }
 
     // inform about the last change when body started sleeping
@@ -116,27 +115,11 @@ export class Body extends Intersection() {
     }
     this.matterSleepEndEventListener = event => this.setAttribute('is-sleeping', 'false')
 
-    // TODO: get uid from awareness directly or implement user controller
-    this.yjsSelfUidEventListener = event => {
-      // todo: received uid equals attr uid === self; rethink since self is less important than actively controlled body
-      // TODO: has uid === client controller shall be something more flexible for multiple bodies
-      this.setAttribute('uid', event.detail.uid)
-      // the dispatch must be after rendering
-      this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
-        detail: {
-          webComponent: this
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      }))
-    }
-
     this.pointerdownEventListener = event => {
       this.setPointerCapture(event.pointerId)
       this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-down`, {
         detail: {
-          webComponent: this,
+          bid: this.getAttribute('bid') || '',
           position: {x: event.clientX, y: event.clientY}
         },
         bubbles: true,
@@ -163,6 +146,22 @@ export class Body extends Intersection() {
       }))
       if (this.hasPointerCapture(event.pointerId)) this.releasePointerCapture(event.pointerId)
     }
+
+    this.usersEventListener = async event => {
+      if (event.detail.selfUser?.uid) {
+        this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
+        this.setAttribute('uid', `b_${JSON.parse(event.detail.selfUser.uid).uuid}`)
+        // the dispatch must be after rendering
+        this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
+          detail: {
+            webComponent: this
+          },
+          bubbles: true,
+          cancelable: true,
+          composed: true
+        }))
+      }
+    }
   }
 
   connectedCallback () {
@@ -173,13 +172,13 @@ export class Body extends Intersection() {
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
     // todo: needs to be self only and likely better uuid as additional info
-    if (this.hasAttribute('self')) {
-      this.globalEventTarget.addEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
+    if (this.hasAttribute('self-controlled')) {
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
+      this.globalEventTarget.addEventListener('yjs-users', this.usersEventListener)
     } else {
-      super.connectedCallback()
+      super.connectedCallback() // start intersection observer
       // the dispatch must be after rendering
       this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
@@ -206,7 +205,7 @@ export class Body extends Intersection() {
     this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-remove-body') || 'yjs-remove-body', {
       detail: {
         body: {
-          isSelf: this.hasAttribute('self'),
+          isSelf: this.hasAttribute('self-controlled'),
           bid: this.bid
         }
       },
@@ -217,8 +216,8 @@ export class Body extends Intersection() {
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    if (this.hasAttribute('self')) {
-      this.globalEventTarget.removeEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
+    if (this.hasAttribute('self-controlled')) {
+      this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
@@ -274,10 +273,10 @@ export class Body extends Intersection() {
         -webkit-user-drag: none;
         user-select: none;
       }
-      :host(:not([intersecting]):not([self])) > section {
+      :host(:not([intersecting]):not([self-controlled])) > section {
         display: none;
       }
-      :host([self]) {
+      :host([self-controlled]) {
         cursor: ${this.getAttribute('cursor') ? this.getAttribute('cursor') : 'var(--cursor, move)'};
         transition: none;
       }
@@ -313,10 +312,10 @@ export class Body extends Intersection() {
 
   copyPropertiesToAttributes () {
     const bodyBoundingClientRect = this.getBoundingClientRect()
-    if (!this.hasAttribute('x')) this.setAttribute('x', bodyBoundingClientRect.x)
-    if (!this.hasAttribute('y')) this.setAttribute('y', bodyBoundingClientRect.y)
-    if (!this.hasAttribute('width')) this.setAttribute('width', bodyBoundingClientRect.width)
-    if (!this.hasAttribute('height')) this.setAttribute('height', bodyBoundingClientRect.height)
+    if (!this.hasAttribute('data-x')) this.setAttribute('data-x', bodyBoundingClientRect.x)
+    if (!this.hasAttribute('data-y')) this.setAttribute('data-y', bodyBoundingClientRect.y)
+    if (!this.hasAttribute('data-width')) this.setAttribute('data-width', bodyBoundingClientRect.width)
+    if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height)
   }
 
   /**

@@ -21,7 +21,7 @@
   slope: number,
   timeScale: number,
   type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid',
-  uid: string | '',
+  uid: string | '', // the uid is set when a user controls this body
   width: number
 }} YjsBody
 */
@@ -44,7 +44,7 @@
   isSleeping: boolean,
   isStatic: boolean,
   position: {x: number, y: number},
-  uid: string | '',
+  uid: string | '', // the uid is set when a user controls this body
   velocity: { x: number, y: number }
 }} YjsBodyTick
 */
@@ -65,6 +65,7 @@ export default class YjsBodies extends WebWorker() {
     if (options.namespace) this.namespace = options.namespace
     else if (!this.namespace) this.namespace = 'yjs-'
 
+    // TODO: Listen to c-users instead of the awareness events analog Body.js
     this.awarenessChangeEventListenerOnce = event => {
       this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-change`, this.awarenessChangeEventListenerOnce)
       this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
@@ -84,7 +85,6 @@ export default class YjsBodies extends WebWorker() {
         return acc
       }, [])
       if (keys.length) {
-        const uid = await this.uid
         this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}bodies`) || `${this.namespace}bodies`, {
           detail: {
             keys: keys.map(key => ({
@@ -112,10 +112,10 @@ export default class YjsBodies extends WebWorker() {
       if (!isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
       let key, yjsBody
       if (isSelf) {
-        bodyTransactions.set(event.detail.body.uid || event.detail.body.bid, event.detail.body)
+        bodyTransactions.set(event.detail.body.bid, event.detail.body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       } else if (
-        (key = event.detail.body.uid || event.detail.body.bid)
+        (key = event.detail.body.bid)
         && (
         !(await this.yMap).type.has(key)
         || !(yjsBody = (await this.yMap).type.get(key)).ctrl
@@ -148,21 +148,13 @@ export default class YjsBodies extends WebWorker() {
       if (!isSelf) return
       const yMap = (await this.yMap).type
       // TODO: add remove capabilities
-      //yMap.remove(event.detail.body.uid || event.detail.body.bid)
+      //yMap.remove(event.detail.body.bid)
     }
 
     /** @type {(any)=>void} */
     this.uidResolve = map => map
     /** @type {Promise<string>} */
     this.uid = new Promise(resolve => (this.uidResolve = resolve))
-    this.uid.then(uid => this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}self-uid`) || `${this.namespace}self-uid`, {
-      detail: {
-        uid
-      },
-      bubbles: true,
-      cancelable: true,
-      composed: true
-    })))
 
     /** @type {(any)=>void} */
     this.yMapResolve = map => map

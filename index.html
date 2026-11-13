@@ -12,14 +12,16 @@
 </head>
 <body data-data-width="950" data-height="400">
   <c-event-driven-yjs no-blur>
-    <c-yjs-bodies>
-      <c-matter>
-        <b-rectangle data-x=50 data-y=0 data-width=50 data-height=50 self background="green"></b-rectangle>
-        <b-rectangle data-x=100 data-y=0 data-width=50 data-height=50 background="red" bid="some-object-uid-999-888-567"></b-rectangle>
-        <b-rectangle data-x=0 data-y=350 data-width=950 data-height=50 background=darkblue is-static=true cursor=normal></b-rectangle>
-      </c-matter>
-    </c-yjs-bodies>
-  </c-event-driven-yjs>
+    <c-users no-nickname no-public-key>
+      <c-yjs-bodies>
+        <c-matter>
+          <b-rectangle data-x=50 data-y=0 data-width=50 data-height=50 self-controlled background="green"></b-rectangle>
+          <b-rectangle data-x=100 data-y=0 data-width=50 data-height=50 background="red" bid="some-object-uid-999-888-567"></b-rectangle>
+          <b-rectangle data-x=0 data-y=350 data-width=950 data-height=50 background=darkblue is-static=true cursor=normal></b-rectangle>
+        </c-matter>
+      </c-yjs-bodies>
+    </c-event-driven-yjs>
+    </c-users>
   <style>
     body {
       margin: 0;
@@ -35,6 +37,7 @@
       import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
       import('./src/es/components/bodies/Rectangle.js').then(module => ['b-rectangle', module.default]),
       import('./src/es/event-driven-web-components-yjs/src/es/EventDrivenYjs.js').then(module => ['c-event-driven-yjs', module.EventDrivenYjs()]),
+      import('./src/es/event-driven-web-components-yjs/src/es/controllers/Users.js').then(module => ['c-users', module.Users()]),
       import('./src/es/components/controllers/YjsBodies.js').then(module => ['c-yjs-bodies', module.default]),
     ]).then(elements => elements.forEach(element => {
       // don't define already existing customElements
