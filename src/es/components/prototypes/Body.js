@@ -15,7 +15,7 @@ import { Intersection } from './Intersection.js' // new IntersectionObserver con
 /**
  * Body is the web component container for any type of html content and reflecting the physics of matter.js
  * Web Component Body does:
- *  - command class Matter regarding physics (../controllers/Matter.js) by dispatching Events: matter-add-body, matter-remove-body
+ *  - command class Matter regarding physics (../controllers/Matter.js) by dispatching Events: matter-add-body, matter-remove-body, matter-command-body
  *  - command class Matter regarding physics drag (../controllers/Matter.js) by dispatching Events: wc-body-pointer-down, wc-body-pointer-move, wc-body-pointer-up
  *  - command class Bodies regarding yjs CRDT synchronization (../controllers/Bodies.js) by dispatching Events: yjs-set-body, yjs-remove-body
  *  - reflect physics from Event: matter-bodies, dispatched by class Matter (../controllers/Matter.js), through CSS by the matter-body coordinates (transform: translate3d(x, y, rotate))
@@ -33,8 +33,8 @@ export class Body extends Intersection() {
       'collision-filter-mask',
       'density', // a number that defines the density of the body (mass per unit area)
       'friction', // a number that defines the friction of the body. The value is always positive and is in the range (0, 1)
-      'frictionAir', // a number that defines the air friction of the body (air resistance). A value of 0 means the body will never slow as it moves through space
-      'frictionStatic', // controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
+      'friction-air', // a number that defines the air friction of the body (air resistance). A value of 0 means the body will never slow as it moves through space
+      'friction-static', // controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
       'height', // number (required for 'rectangle' and 'trapezoid')
       'inertia', // how difficult it is for an object to rotate
       'is-sensor', // a flag that indicates whether a body is a sensor. Sensor triggers collision events, but doesn't react with colliding body physically
@@ -74,13 +74,10 @@ export class Body extends Intersection() {
     if (options.accuracy) accuracy = options.accuracy
     else if (!accuracy) accuracy = 2
 
-    // TODO: continue here... check how to deal with sleeping
-    this.matterBodyEventListener = event => {
+    // update the css according to the matter.js physics. Also inform through yjs crdt about the changed state as well as when the body starts sleeping
+    this.matterBodyEventListener = (event, sleepingChanged = false) => {
       let body
       if (body = event.detail.body) {
-        this.body = body
-        const sleepingChanged = this.getAttribute('is-sleeping') !== String(body.isSleeping)
-        if (sleepingChanged) this.setAttribute('is-sleeping', body.isSleeping)
         /*
         // NOTE: transform has better performance than top and left props
         top: ${body.position.y - this.getAttribute('half-height')}px;
@@ -124,19 +121,17 @@ export class Body extends Intersection() {
       }
     }// todo: how does phaser solve matter world size/walls?
 
-    this.matterSleepStartEventListener = async event => {
-      //if (event.detail.body === await this.body) this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
+    // inform about the last change when body started sleeping
+    this.matterSleepStartEventListener = event => {
+      this.setAttribute('is-sleeping', 'true')
+      this.matterBodyEventListener(event, true)
     }
-    this.matterSleepEndEventListener = async event => {
-      //if (event.detail.body === await this.body) this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
-    }
+    this.matterSleepEndEventListener = event => this.setAttribute('is-sleeping', 'false')
 
     this.yjsSelfUidEventListener = event => {
       // todo: received uid equals attr uid === self
       // TODO: has uid === client controller shall be something more flexible for multiple bodies
       this.setAttribute('uid', event.detail.uid)
-      this.setAttribute('bid', event.detail.uid)
-      this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
       // the dispatch must be after rendering
       this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
@@ -182,10 +177,12 @@ export class Body extends Intersection() {
   }
 
   connectedCallback () {
+    if (!this.hasAttribute('is-static')) this.setAttribute('is-sleeping', 'false') // initially the body is not sleeping
     if (this.shouldRenderCSS()) this.renderCSS()
     if (this.shouldRenderHTML()) this.renderHTML()
-    this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
-    this.globalEventTarget.addEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
+    this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
+    this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
     // todo: needs to be self only and likely better uuid as additional info
     if (this.hasAttribute('self')) {
       this.globalEventTarget.addEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
@@ -194,8 +191,6 @@ export class Body extends Intersection() {
       this.addEventListener('pointerup', this.pointerupEventListener)
     } else {
       super.connectedCallback()
-      // TODO: Use other targets than document body, Environment.globalEventTarget or such...
-      this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
       // the dispatch must be after rendering
       this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
         detail: {
@@ -231,8 +226,8 @@ export class Body extends Intersection() {
       composed: true
     }))
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
-    this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-start') || 'matter-sleep-start', this.matterSleepStartEventListener)
-    this.globalEventTarget.removeEventListener(this.getAttribute('matter-sleep-end') || 'matter-sleep-end', this.matterSleepEndEventListener)
+    this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
+    this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
     if (this.hasAttribute('self')) {
       this.globalEventTarget.removeEventListener(this.getAttribute('yjs-self-uid') || 'yjs-self-uid', this.yjsSelfUidEventListener)
       this.removeEventListener('pointerdown', this.pointerdownEventListener)

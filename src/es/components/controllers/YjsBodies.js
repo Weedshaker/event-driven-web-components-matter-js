@@ -20,8 +20,7 @@
   sides: number,
   slope: number,
   timeScale: number,
-  type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
-  uid: string | '',
+  type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid',
   width: number
 }} YjsBody
 */

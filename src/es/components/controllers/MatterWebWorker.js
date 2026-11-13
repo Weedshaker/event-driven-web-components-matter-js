@@ -47,17 +47,7 @@ export default class MatterWebWorker {
     Matter.Events.on(this.engine, 'afterUpdate', () => {
       this.onmessage({
         type: 'afterUpdate',
-        bodies: this.engine.world.bodies.map(body => ({
-          angle: body.angle,
-          angularVelocity: body.angularVelocity,
-          position: body.position,
-          velocity: body.velocity,
-          bid: body.bid,
-          uid: body.uid,
-          isStatic: body.isStatic,
-          isSleeping: body.isSleeping,
-          collisions: body.collisions
-        }))
+        bodies: this.engine.world.bodies.map(MatterWebWorker.mapBodyToYjsBodyTick)
       })
       this.canUpdate = true
     })
@@ -93,15 +83,27 @@ export default class MatterWebWorker {
       }
     })
 
-    this.oidToMatterIdMap = new Map()
+    this.bidToMatterIdMap = new Map()
     this.addBodyEventListener = event => {
       const body = Matter.Bodies.rectangle(...event.data.shape)
       Matter.Events.on(body, 'sleepStart', event => {
         if (body.isStatic) return
         if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)
+        this.onmessage({
+          type: 'sleepStart',
+          body: MatterWebWorker.mapBodyToYjsBodyTick(body)
+        })
+      })
+      Matter.Events.on(body, 'sleepEnd', event => {
+        if (body.isStatic) return
+        if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)
+        this.onmessage({
+          type: 'sleepEnd',
+          body: MatterWebWorker.mapBodyToYjsBodyTick(body)
+        })
       })
       Matter.Composite.add(this.engine.world, body)
-      this.oidToMatterIdMap.set(event.data.bid, body.id)
+      this.bidToMatterIdMap.set(event.data.bid, body.id)
     }
 
     // TODO: on remove also remove this body as a collision!
@@ -131,8 +133,8 @@ export default class MatterWebWorker {
     switch (event.data.type) {
       case 'yjsBodies':
         event.data.bodies.forEach(yjsBody => {
-          if (this.oidToMatterIdMap.has(yjsBody.bid)) this.beforeUpdateFuncs.push(() => {
-            const body = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(yjsBody.bid), 'body')
+          if (this.bidToMatterIdMap.has(yjsBody.bid)) this.beforeUpdateFuncs.push(() => {
+            const body = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(yjsBody.bid), 'body')
             if (!body) return null
             if (body.angle !== yjsBody.angle) Matter.Body.setAngle(body, yjsBody.angle)
             if (body.angularVelocity !== yjsBody.angularVelocity) Matter.Body.setAngularVelocity(body, yjsBody.angularVelocity)
@@ -149,7 +151,7 @@ export default class MatterWebWorker {
         break
       case 'bodyPointerDown':
         if (this.dragConstraint) Matter.Composite.remove(this.engine.world, this.dragConstraint)
-        const bodyA = Matter.Composite.get(this.engine.world, this.oidToMatterIdMap.get(event.data.bid), 'body')
+        const bodyA = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(event.data.bid), 'body')
         if (!bodyA) return
         this.dragConstraint = Matter.Constraint.create({
           bodyA,
@@ -180,6 +182,26 @@ export default class MatterWebWorker {
   // this is the postMessage function within the web worker but called onmessage from the outside
   onmessage (message) {
     self.postMessage(message)
+  }
+
+  /**
+   * Map the properties to simple properties equals simple object which can pass the message channel
+   * 
+   * @param {any} body
+   * @returns {import('./YjsBodies.js').YjsBodyTick}
+   */
+  static mapBodyToYjsBodyTick (body) {
+    return {
+      angle: body.angle,
+      angularVelocity: body.angularVelocity,
+      bid: body.bid,
+      collisions: body.collisions,
+      isSleeping: body.isSleeping,
+      isStatic: body.isStatic,
+      position: body.position,
+      uid: body.uid,
+      velocity: body.velocity
+    }
   }
 }
 

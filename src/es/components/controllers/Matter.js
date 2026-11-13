@@ -102,6 +102,26 @@ export default class MatterElement extends HTMLElement {
           bodies = event.data.bodies
           if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _dispatchEvent())
           break
+        case 'sleepStart':
+          this.dispatchEvent(new CustomEvent(`${this.namespace}sleep-start-body-${event.data.body.bid}`, {
+            detail: {
+              body: event.data.body
+            },
+            bubbles: true,
+            cancelable: true,
+            composed: true
+          }))
+          break
+        case 'sleepEnd':
+          this.dispatchEvent(new CustomEvent(`${this.namespace}sleep-end-body-${event.data.body.bid}`, {
+            detail: {
+              body: event.data.body
+            },
+            bubbles: true,
+            cancelable: true,
+            composed: true
+          }))
+          break
       }
     }
     const _dispatchEvent = () => {
