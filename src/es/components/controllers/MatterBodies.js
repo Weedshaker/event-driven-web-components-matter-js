@@ -1,30 +1,6 @@
 // @ts-check
 
-/**
- * web component attribute controlled props
- @typedef {{
-  bid: string,
-  collisionFilter: { category: import('./Matter.js').CollisionCategory, mask: import('./Matter.js').CollisionCategory, group: number },
-  density: number,
-  friction: number,
-  frictionAir: number,
-  frictionStatic: number,
-  height: number,
-  inertia: number,
-  isSensor: boolean, // TODO: double with YjsBodyTick
-  isStatic: boolean, // TODO: double with YjsBodyTick
-  mass: number,
-  position: {x: number, y: number},
-  radius: number,
-  restitution: number,
-  sides: number,
-  slope: number,
-  timeScale: number,
-  type: 'circle' | 'polygon' | 'rectangle' | 'trapezoid',
-  uid: string | '', // the uid is set when a user controls this body
-  width: number
-}} YjsBody
-*/
+import { bodySelectorNamespace } from '../atoms/Body.js'
 
 /**
  * matter.js per tick updated props
@@ -46,12 +22,12 @@
   position: {x: number, y: number},
   uid: string | '', // the uid is set when a user controls this body
   velocity: { x: number, y: number }
-}} YjsBodyTick
+}} MatterBody
 */
 
 import { WebWorker } from '../prototypes/WebWorker.js'
 
-export default class YjsBodies extends WebWorker() {
+export default class MatterBodies extends WebWorker() {
   /**
    * Creates an instance of yjs users. The constructor will be called for every custom element using this class when initially created.
    *
@@ -72,20 +48,20 @@ export default class YjsBodies extends WebWorker() {
       this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
       this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
       this.awarenessChangeEventListenerOnce = () => {}
-      this.uidResolve(`b_${JSON.parse(event.detail.uid).uuid}`)
+      this.uidResolve(`${bodySelectorNamespace}${JSON.parse(event.detail.uid).uuid}`)
     }
 
     this.bodiesObserveEventListener = async event => {
       const uid = await this.uid
       const keys = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).reduce((acc, [key]) => {
         if (!event.detail.type.has(key)) return acc
-        const yjsBody = event.detail.type.get(key)
-        if (yjsBody.uid === uid || yjsBody.ctrl?.uid === uid) return acc
+        const body = event.detail.type.get(key)
+        if (body.uid === uid || body.ctrl?.uid === uid) return acc
         acc.push(key)
         return acc
       }, [])
       if (keys.length) {
-        this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}bodies`) || `${this.namespace}bodies`, {
+        this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}matter-bodies`) || `${this.namespace}matter-bodies`, {
           detail: {
             keys: keys.map(key => ({
               key,
@@ -110,7 +86,7 @@ export default class YjsBodies extends WebWorker() {
       const uid = await this.uid
       const isSelf = uid === event.detail.body.uid
       if (!isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
-      let key, yjsBody
+      let key, body
       if (isSelf) {
         bodyTransactions.set(event.detail.body.bid, event.detail.body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
@@ -118,10 +94,10 @@ export default class YjsBodies extends WebWorker() {
         (key = event.detail.body.bid)
         && (
         !(await this.yMap).type.has(key)
-        || !(yjsBody = (await this.yMap).type.get(key)).ctrl
-        || yjsBody.ctrl.uid === uid
-        || await this.webWorker(detectCollision, event.detail.body.collisions, uid, yjsBody.ctrl.uid)
-        || yjsBody.ctrl.timestamp + 1000 < Date.now()
+        || !(body = (await this.yMap).type.get(key)).ctrl
+        || body.ctrl.uid === uid
+        || await this.webWorker(detectCollision, event.detail.body.collisions, uid, body.ctrl.uid)
+        || body.ctrl.timestamp + 1000 < Date.now()
       )) {
         // all bodies without a uid
         bodyTransactions.set(key, {...event.detail.body, ctrl: {

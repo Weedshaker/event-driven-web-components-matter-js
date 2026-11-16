@@ -10,7 +10,14 @@
  }} options
 */
 
-import { Intersection } from './Intersection.js' // new IntersectionObserver controlling attribute 'intersecting'
+import { Intersection } from '../prototypes/Intersection.js' // new IntersectionObserver controlling attribute 'intersecting'
+
+/**
+ * a uuid can start with alphanumeric char but dom query selector needs an alphabetic first char.
+ * 
+ * @type {string}
+ */
+export const bodySelectorNamespace = 'b_'
 
 /**
  * Body is the web component container for any type of html content and reflecting the physics of matter.js
@@ -25,13 +32,16 @@ import { Intersection } from './Intersection.js' // new IntersectionObserver con
  * @param {CustomElementConstructor} ChosenHTMLElement
  * @return {CustomElementConstructor | *}
  */
-export class Body extends Intersection() {
+export default class Body extends Intersection() {
   static get observedAttributes () {
     return [
       'collision-filter-category', // controls collision categories, allowed collisions, and group-based collision overrides. default: { category: 0x0001, mask: 0xFFFFFFFF, group: 0 }
       'collision-filter-group',
       'collision-filter-mask',
       'data-height', // number (required for 'rectangle' and 'trapezoid')
+      'data-radius', // number (required for 'circle' and 'polygon')
+      'data-sides', // number (required for 'polygon')
+      'data-slope', // number (required for 'trapezoid')
       'data-width', // number (required for 'rectangle' and 'trapezoid')
       'data-x', // number (position coordinate)
       'data-y', // number (position coordinate)
@@ -43,10 +53,7 @@ export class Body extends Intersection() {
       'is-sensor', // a flag that indicates whether a body is a sensor. Sensor triggers collision events, but doesn't react with colliding body physically
       'is-static', // boolean by hasAttribute
       'mass', // a number that defines the mass of the body
-      'radius', // number (required for 'circle' and 'polygon')
       'restitution', // a number that defines the restitution (elasticity) of the body. The value is always positive and is in the range (0, 1
-      'sides', // number (required for 'polygon')
-      'slope', // number (required for 'trapezoid')
       'timeScale', // controls the speed of time for an individual physics body
       'type' // 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
     ]
@@ -67,7 +74,7 @@ export class Body extends Intersection() {
 
     // unique body id used to identify at yjs and matter.js
     if (options.bid) this.bid = options.bid
-    else if (!this.bid) this.bid = `b_${self.crypto.randomUUID()}`
+    else if (!this.bid) this.bid = `${bodySelectorNamespace}${self.crypto.randomUUID()}`
 
     // The accuracy for the css number values at transform translate3d toFixed
     if (options.accuracy) this.accuracy = options.accuracy
@@ -81,7 +88,7 @@ export class Body extends Intersection() {
         this.doOnIntersection = () => {
           this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
             detail: {
-              /** @type {import('../controllers/YjsBodies.js').YjsBodyTick} */
+              /** @type {import('../controllers/MatterBodies.js').MatterBody} */
               body
             },
             bubbles: true,
@@ -110,10 +117,10 @@ export class Body extends Intersection() {
 
     // inform about the last change when body started sleeping
     this.matterSleepStartEventListener = event => {
-      this.setAttribute('is-sleeping', 'true')
+      this.setAttribute('is-sleeping', '')
       this.matterBodyEventListener(event, true)
     }
-    this.matterSleepEndEventListener = event => this.setAttribute('is-sleeping', 'false')
+    this.matterSleepEndEventListener = event => this.removeAttribute('is-sleeping')
 
     this.pointerdownEventListener = event => {
       this.setPointerCapture(event.pointerId)
@@ -150,22 +157,13 @@ export class Body extends Intersection() {
     this.usersEventListener = async event => {
       if (event.detail.selfUser?.uid) {
         this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
-        this.setAttribute('uid', `b_${JSON.parse(event.detail.selfUser.uid).uuid}`)
-        // the dispatch must be after rendering
-        this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
-          detail: {
-            webComponent: this
-          },
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        }))
+        this.setAttribute('uid', `${bodySelectorNamespace}${JSON.parse(event.detail.selfUser.uid).uuid}`)
+        this.addBody()
       }
     }
   }
 
   connectedCallback () {
-    if (!this.hasAttribute('is-static')) this.setAttribute('is-sleeping', 'false') // initially the body is not sleeping
     if (this.shouldRenderCSS()) this.renderCSS()
     if (this.shouldRenderHTML()) this.renderHTML()
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
@@ -179,15 +177,7 @@ export class Body extends Intersection() {
       this.globalEventTarget.addEventListener('yjs-users', this.usersEventListener)
     } else {
       super.connectedCallback() // start intersection observer
-      // the dispatch must be after rendering
-      this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
-        detail: {
-          webComponent: this
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      }))
+      this.addBody()
     }
     // TODO: https://www.brm.io/matter-js/docs/classes/Body.html#method_setParts set and unset parts. when setting parts first remove those part bodies from world, when unset then set them separately to world
   }
@@ -227,6 +217,8 @@ export class Body extends Intersection() {
   }
 
   attributeChangedCallback (name, oldValue, newValue) {
+    // todo: observedAttributes changed, destroy old matter body and make a new one with current position, angle, velocity, angularVelocity
+    // todo: dispatch matter modify + prop; collect all with requestAnimationFrame for multiple attr changes
     if (name === 'is-static') {
       //this.body.then(body => (body.isStatic = this.isStatic()))
     } else if (name === 'data-width' || name === 'data-height') {
@@ -273,6 +265,9 @@ export class Body extends Intersection() {
         -webkit-user-drag: none;
         user-select: none;
       }
+      :host([has-error]) {
+        color: red;
+      }
       :host(:not([intersecting]):not([self-controlled])) > section {
         display: none;
       }
@@ -280,7 +275,7 @@ export class Body extends Intersection() {
         cursor: ${this.getAttribute('cursor') ? this.getAttribute('cursor') : 'var(--cursor, move)'};
         transition: none;
       }
-      :host([is-sleeping=false]) {
+      :host(:not([is-sleeping]):not([is-static])) {
         will-change: transform;
       }
       :host {
@@ -318,11 +313,90 @@ export class Body extends Intersection() {
     if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height)
   }
 
+  addBody () {
+    // the dispatch must be after rendering
+    const {args, method, error} = Body.getMethodAndArgs(this)
+    if (error) {
+      console.warn((this.section.textContent = error), this)
+      this.setAttribute('has-error', '')
+    } else {
+      this.removeAttribute('has-error')
+    }
+    this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
+      detail: {
+        args,
+        bid: this.getAttribute('bid'),
+        method
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }))
+  }
+
   /**
-   * @return {boolean}
+   * Create the method call to create a matter.js body: https://www.brm.io/matter-js/docs/classes/Bodies.html
+   * 
+   * @param {Body} webComponent
+   * @return {{
+   *  args: [number, number, number, number, {webComponent:HTMLElement}|any],
+   *  method: 'string',
+   *  error: null
+   * } | {args: null, method: null, error: string}}
    */
-  isStatic () {
-    return this.hasAttribute('is-static') && this.getAttribute('is-static') !== 'false'
+  static getMethodAndArgs (webComponent) {
+    if (!webComponent.hasAttribute('type')) return {args: null, method: null, error: 'type of shape missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody types: "circle" | "polygon" | "rectangle" | "trapezoid" is required'}
+    const getOptions = () => {
+      // custom properties
+      const options = {
+        bid: webComponent.getAttribute('bid') || '',
+        uid: webComponent.getAttribute('uid') || '',
+        collisions: []
+      }
+      const requireCollisionFilterProp = () => {
+        if (!options.collisionFilter) options.collisionFilter = {}
+      }
+      // Matter.Body properties must only be set if they are available
+      if (webComponent.hasAttribute('collision-filter-category')) {
+        requireCollisionFilterProp()
+        options.collisionFilter.category = webComponent.getAttribute('collision-filter-category')
+      }
+      if (webComponent.hasAttribute('collision-filter-group')) {
+        requireCollisionFilterProp()
+        options.collisionFilter.group = Number(webComponent.getAttribute('collision-filter-group'))
+      }
+      if (webComponent.hasAttribute('collision-filter-mask')) {
+        requireCollisionFilterProp()
+        options.collisionFilter.mask = Number(webComponent.getAttribute('collision-filter-mask'))
+      }
+      if (webComponent.hasAttribute('density')) options.density = Number(webComponent.getAttribute('density'))
+      if (webComponent.hasAttribute('friction-air')) options.frictionAir = Number(webComponent.getAttribute('friction-air'))
+      if (webComponent.hasAttribute('friction-static')) options.frictionStatic = Number(webComponent.getAttribute('friction-static'))
+      if (webComponent.hasAttribute('friction')) options.friction = Number(webComponent.getAttribute('friction'))
+      if (webComponent.hasAttribute('inertia')) options.inertia = Number(webComponent.getAttribute('inertia'))  
+      options.isSensor = webComponent.hasAttribute('is-sensor')
+      options.isStatic = webComponent.hasAttribute('is-static')
+      if (webComponent.hasAttribute('mass')) options.mass = Number(webComponent.getAttribute('mass'))
+      if (webComponent.hasAttribute('restitution')) options.restitution = Number(webComponent.getAttribute('restitution'))
+      if (webComponent.hasAttribute('time-scale')) options.timeScale = Number(webComponent.getAttribute('time-scale'))
+      return options
+    }
+    switch (webComponent.getAttribute('type')) {
+      case 'rectangle':
+        if (!webComponent.getAttribute('data-width') || !webComponent.getAttribute('data-height')) return {args: null, method: null, error: 'Width or height of shape is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+        return {
+          args: [
+            Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-width-half')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-y') || 0) + Number(webComponent.getAttribute('data-height-half')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-width')),
+            Number(webComponent.getAttribute('data-height')),
+            getOptions()
+          ],
+          method: webComponent.getAttribute('type'),
+          error: null
+        }
+    }
+    return {args: null, method: null, error: 'type of shape not of types: "circle" | "polygon" | "rectangle" | "trapezoid". See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
   }
 
   get section () {

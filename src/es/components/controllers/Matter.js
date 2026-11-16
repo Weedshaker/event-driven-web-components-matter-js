@@ -106,7 +106,7 @@ export default class MatterElement extends HTMLElement {
             bodies.forEach(body => {
               if (!body.isSleeping && !body.isStatic) this.dispatchEvent(new CustomEvent(`${this.namespace}body-${body.bid}`, {
                 detail: {
-                  /** @type {import('./YjsBodies.js').YjsBodyTick} */
+                  /** @type {import('./MatterBodies.js').MatterBody} */
                   body
                 },
                 bubbles: true,
@@ -143,12 +143,12 @@ export default class MatterElement extends HTMLElement {
 
     this.addBodyEventListener = event => {
       let webComponent = null
-      if (event && event.detail && (webComponent = event.detail.webComponent) && webComponent.hasAttribute('bid')) {
-        // add a reference pointing to the webComponent
+      if (event && event.detail && event.detail.args && event.detail.bid && event.detail.method) {
         this.worker.postMessage({
           type: 'addBody',
-          bid: webComponent.getAttribute('bid'),
-          shape: MatterElement.getRectangle(webComponent)
+          args: event.detail.args,
+          bid: event.detail.bid,
+          method: event.detail.method
         })
       }
     }
@@ -182,28 +182,29 @@ export default class MatterElement extends HTMLElement {
     }
 
     const webComponentMap = new Map()
-    this.yjsBodiesEventListener = async event => {
+    this.matterBodiesEventListener = async event => {
       // TODO: a separate controller as a factory for the web components is required
       const bodies = []
       event.detail.keys.forEach(async ({key, isSelf, getBody}) => {
         if (isSelf) return
-        const yjsBody = getBody()
-        bodies.push(yjsBody)
+        const body = getBody()
+        bodies.push(body)
         let webComponent
         if (webComponentMap.has(key)) {
           webComponent = await webComponentMap.get(key)
-        } else if ((webComponent = this.querySelector(`[bid="${yjsBody.bid}"]`))) {
+        } else if ((webComponent = this.querySelector(`[bid="${body.bid}"]`))) {
           webComponentMap.set(key, Promise.resolve(webComponent))
         } else {
           let resolveWebComponent
           webComponentMap.set(key, new Promise(resolve => (resolveWebComponent = resolve)))
-          const module = await import(`${this.importMetaUrl}../bodies/Rectangle.js`)
+          const module = await import(`${this.importMetaUrl}../atoms/Body.js`)
           webComponent = new module.default
-          webComponent.setAttribute('data-x', yjsBody.position.x)
-          webComponent.setAttribute('data-y', yjsBody.position.y)
-          webComponent.setAttribute('bid', yjsBody.bid)
-          webComponent.setAttribute('uid', yjsBody.uid)
-          webComponent.setAttribute('is-static', yjsBody.isStatic)
+          webComponent.setAttribute('type', 'rectangle')
+          webComponent.setAttribute('data-x', body.position.x)
+          webComponent.setAttribute('data-y', body.position.y)
+          webComponent.setAttribute('bid', body.bid)
+          webComponent.setAttribute('uid', body.uid)
+          if (body.isStatic) webComponent.setAttribute('is-static', '')
           // TODO: make dynamic width, height, shape
           webComponent.setAttribute('data-width', '50')
           webComponent.setAttribute('data-height', '50')
@@ -213,7 +214,7 @@ export default class MatterElement extends HTMLElement {
         }
       })
       this.worker.postMessage({
-        type: 'yjsBodies',
+        type: 'matterBodies',
         bodies
       })
     }
@@ -225,7 +226,7 @@ export default class MatterElement extends HTMLElement {
     this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-down') || 'wc-body-pointer-down', this.bodyPointerDownEventListener)
     this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-move') || 'wc-body-pointer-move', this.bodyPointerMoveEventListener)
     this.globalEventTarget.addEventListener(this.getAttribute('wc-body-pointer-up') || 'wc-body-pointer-up', this.bodyPointerUpEventListener)
-    this.globalEventTarget.addEventListener(this.getAttribute('yjs-bodies') || 'yjs-bodies', this.yjsBodiesEventListener)
+    this.globalEventTarget.addEventListener(this.getAttribute('yjs-matter-bodies') || 'yjs-matter-bodies', this.matterBodiesEventListener)
   }
 
   disconnectedCallback () {
@@ -234,31 +235,7 @@ export default class MatterElement extends HTMLElement {
     this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-down') || 'wc-body-pointer-down', this.bodyPointerDownEventListener)
     this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-move') || 'wc-body-pointer-move', this.bodyPointerMoveEventListener)
     this.globalEventTarget.removeEventListener(this.getAttribute('wc-body-pointer-up') || 'wc-body-pointer-up', this.bodyPointerUpEventListener)
-    this.globalEventTarget.removeEventListener(this.getAttribute('yjs-bodies') || 'yjs-bodies', this.yjsBodiesEventListener)
-  }
-
-
-  /**
-   * @param {HTMLElement} webComponent
-   * @return {[number, number, number, number, {webComponent:HTMLElement}|any]}
-   */
-  static getRectangle (webComponent) {
-    return [
-      Number(webComponent.getAttribute('data-x')) + Number(webComponent.getAttribute('data-width')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
-      Number(webComponent.getAttribute('data-y')) + Number(webComponent.getAttribute('data-height')) / 2, // matter.js will use the coordinates for center of body but here we do adjust for top/left
-      Number(webComponent.getAttribute('data-width')),
-      Number(webComponent.getAttribute('data-height')),
-      // @ts-ignore
-      {
-        bid: webComponent.getAttribute('bid') || '',
-        uid: webComponent.getAttribute('uid') || '',
-        restitution: webComponent.getAttribute('restitution') || 0.6,
-        friction: webComponent.getAttribute('friction') || 0.1,
-        // @ts-ignore
-        isStatic: webComponent.isStatic(),
-        collisions: []
-      }
-    ]
+    this.globalEventTarget.removeEventListener(this.getAttribute('yjs-matter-bodies') || 'yjs-matter-bodies', this.matterBodiesEventListener)
   }
 
   /**

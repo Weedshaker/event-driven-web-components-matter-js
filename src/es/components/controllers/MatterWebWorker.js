@@ -4,6 +4,7 @@
 import Matter from '../../dependencies/matter.min.js'
 
 /***
+ * Yjs CRDT representative of the Bodies from matter.js
  * https://github.com/liabru/matter-js
  * https://brm.io/matter-js/docs/
  * 
@@ -47,7 +48,7 @@ export default class MatterWebWorker {
     Matter.Events.on(this.engine, 'afterUpdate', () => {
       this.onmessage({
         type: 'afterUpdate',
-        bodies: this.engine.world.bodies.map(MatterWebWorker.mapBodyToYjsBodyTick)
+        bodies: this.engine.world.bodies.map(MatterWebWorker.mapBodyToYjsMatterBody)
       })
       this.canUpdate = true
     })
@@ -55,7 +56,7 @@ export default class MatterWebWorker {
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair
         if (bodyA.isSensor || bodyB.isSensor) continue
-        // todo: add full collision info and adjust yjsbody interface
+        // todo: add full collision info and adjust MatterBody interface
         bodyA.collisions.unshift({
           bid: bodyB.bid,
           uid: bodyB.uid,
@@ -85,13 +86,13 @@ export default class MatterWebWorker {
 
     this.bidToMatterIdMap = new Map()
     this.addBodyEventListener = event => {
-      const body = Matter.Bodies.rectangle(...event.data.shape)
+      const body = Matter.Bodies[event.data.method](...event.data.args)
       Matter.Events.on(body, 'sleepStart', event => {
         if (body.isStatic) return
         if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)
         this.onmessage({
           type: 'sleepStart',
-          body: MatterWebWorker.mapBodyToYjsBodyTick(body)
+          body: MatterWebWorker.mapBodyToYjsMatterBody(body)
         })
       })
       Matter.Events.on(body, 'sleepEnd', event => {
@@ -99,7 +100,7 @@ export default class MatterWebWorker {
         if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)
         this.onmessage({
           type: 'sleepEnd',
-          body: MatterWebWorker.mapBodyToYjsBodyTick(body)
+          body: MatterWebWorker.mapBodyToYjsMatterBody(body)
         })
       })
       Matter.Composite.add(this.engine.world, body)
@@ -131,17 +132,17 @@ export default class MatterWebWorker {
   postMessage = event => {
     if (!event.data) event.data = event
     switch (event.data.type) {
-      case 'yjsBodies':
-        event.data.bodies.forEach(yjsBody => {
-          if (this.bidToMatterIdMap.has(yjsBody.bid)) this.beforeUpdateFuncs.push(() => {
-            const body = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(yjsBody.bid), 'body')
+      case 'matterBodies':
+        event.data.bodies.forEach(dataBody => {
+          if (this.bidToMatterIdMap.has(dataBody.bid)) this.beforeUpdateFuncs.push(() => {
+            const body = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(dataBody.bid), 'body')
             if (!body) return null
-            if (body.angle !== yjsBody.angle) Matter.Body.setAngle(body, yjsBody.angle)
-            if (body.angularVelocity !== yjsBody.angularVelocity) Matter.Body.setAngularVelocity(body, yjsBody.angularVelocity)
-            if (body.position.x !== yjsBody.position.x || body.position.y !== yjsBody.position.y) Matter.Body.setPosition(body, yjsBody.position)
-            if (body.velocity !== yjsBody.velocity) Matter.Body.setVelocity(body, yjsBody.velocity)
-            if (body.isStatic !== yjsBody.isStatic) Matter.Body.setStatic(body, yjsBody.isStatic)
-            if (body.isSleeping !== yjsBody.isSleeping) Matter.Sleeping.set(body, yjsBody.isSleeping)
+            if (body.angle !== dataBody.angle) Matter.Body.setAngle(body, dataBody.angle)
+            if (body.angularVelocity !== dataBody.angularVelocity) Matter.Body.setAngularVelocity(body, dataBody.angularVelocity)
+            if (body.position.x !== dataBody.position.x || body.position.y !== dataBody.position.y) Matter.Body.setPosition(body, dataBody.position)
+            if (body.velocity !== dataBody.velocity) Matter.Body.setVelocity(body, dataBody.velocity)
+            if (body.isStatic !== dataBody.isStatic) Matter.Body.setStatic(body, dataBody.isStatic)
+            if (body.isSleeping !== dataBody.isSleeping) Matter.Sleeping.set(body, dataBody.isSleeping)
             return body
           })
         })
@@ -188,9 +189,9 @@ export default class MatterWebWorker {
    * Map the properties to simple properties equals simple object which can pass the message channel
    * 
    * @param {any} body
-   * @returns {import('./YjsBodies.js').YjsBodyTick}
+   * @returns {import('./MatterBodies.js').MatterBody}
    */
-  static mapBodyToYjsBodyTick (body) {
+  static mapBodyToYjsMatterBody (body) {
     return {
       angle: body.angle,
       angularVelocity: body.angularVelocity,
