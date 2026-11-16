@@ -224,6 +224,9 @@ export default class Body extends Intersection() {
     } else if (name === 'data-width' || name === 'data-height') {
       this.setAttribute('data-width-half', this.getAttribute('data-width') / 2)
       this.setAttribute('data-height-half', this.getAttribute('data-height') / 2)
+    } else if (name === 'data-radius') {
+      this.setAttribute('data-width-half', this.getAttribute('data-radius'))
+      this.setAttribute('data-height-half', this.getAttribute('data-radius'))
     }
   }
 
@@ -339,7 +342,7 @@ export default class Body extends Intersection() {
    * 
    * @param {Body} webComponent
    * @return {{
-   *  args: [number, number, number, number, {webComponent:HTMLElement}|any],
+   *  args: [number, number, number, number, {webComponent:HTMLElement}|any] | [number, number, number, {webComponent:HTMLElement}|any],
    *  method: 'string',
    *  error: null
    * } | {args: null, method: null, error: string}}
@@ -382,6 +385,19 @@ export default class Body extends Intersection() {
       return options
     }
     switch (webComponent.getAttribute('type')) {
+      // TODO:  fix circle (circle has no data-width/height so do the css) and do the other shapes plus all data-attributes
+      case 'circle':
+        if (!webComponent.getAttribute('data-radius')) return {args: null, method: null, error: 'Radius of shape is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+        return {
+          args: [
+            Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-y') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-radius')),
+            getOptions()
+          ],
+          method: webComponent.getAttribute('type'),
+          error: null
+        }
       case 'rectangle':
         if (!webComponent.getAttribute('data-width') || !webComponent.getAttribute('data-height')) return {args: null, method: null, error: 'Width or height of shape is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
         return {
