@@ -294,6 +294,8 @@ export default class Body extends Intersection() {
       }
       :host > section {
         background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
+      }
+      :host([type=rectangle]) > section {
         height: var(--height);
         width: var(--width);
       }
