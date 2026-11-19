@@ -2,6 +2,8 @@
 /* global self */
 
 import Matter from '../../dependencies/matter.min.js'
+import decomp from '../../dependencies/poly-decomp.min.js'
+Matter.Common.setDecomp(decomp)
 
 /***
  * Yjs CRDT representative of the Bodies from matter.js
@@ -86,7 +88,26 @@ export default class MatterWebWorker {
 
     this.bidToMatterIdMap = new Map()
     this.addBodyEventListener = event => {
-      const body = Matter.Bodies[event.data.method](...event.data.args)
+      const body = Matter.Bodies[event.data.method === 'polygon'
+        ? 'fromVertices'
+        : event.data.method
+      ](...event.data.args)
+      let center = {
+        x: body.position.x - body.bounds.min.x,
+        y: body.position.y - body.bounds.min.y
+      }
+      // center of mass adjusted by the min vertex set
+      if (event.data.vertexSets && event.data.radius) {
+        center = {
+          x: body.position.x - body.bounds.min.x + Math.min(...event.data.vertexSets.map(position => position.x)) + event.data.radius,
+          y: body.position.y - body.bounds.min.y + Math.min(...event.data.vertexSets.map(position => position.y)) + event.data.radius
+        }
+      }
+      this.onmessage({
+        type: 'addedBody',
+        body: MatterWebWorker.mapBodyToYjsMatterBody(body),
+        center
+      })
       Matter.Events.on(body, 'sleepStart', event => {
         if (body.isStatic) return
         if (!body.collisions.some(collision => collision.isGround)) Matter.Sleeping.set(body, false)

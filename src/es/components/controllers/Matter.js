@@ -1,7 +1,7 @@
 // @ts-check
 /* global self */
 
-import Matter from '../../dependencies/matter.min.js'
+import Matter from '../../dependencies/matter.min.js' // needed for debug render
 import MatterWebWorker from './MatterWebWorker.js'
 
 /**
@@ -118,6 +118,17 @@ export default class MatterElement extends HTMLElement {
             animationFrameId = null
           })
           break
+        case 'addedBody':
+          this.dispatchEvent(new CustomEvent(`${this.namespace}added-body-${event.data.body.bid}`, {
+            detail: {
+              body: event.data.body,
+              center: event.data.center
+            },
+            bubbles: true,
+            cancelable: true,
+            composed: true
+          }))
+          break
         case 'sleepStart':
           this.dispatchEvent(new CustomEvent(`${this.namespace}sleep-start-body-${event.data.body.bid}`, {
             detail: {
@@ -148,7 +159,9 @@ export default class MatterElement extends HTMLElement {
           type: 'addBody',
           args: event.detail.args,
           bid: event.detail.bid,
-          method: event.detail.method
+          method: event.detail.method,
+          vertexSets: event.detail.vertexSets,
+          radius: event.detail.radius
         })
       }
     }

@@ -38,11 +38,10 @@ export default class Body extends Intersection() {
       'collision-filter-category', // controls collision categories, allowed collisions, and group-based collision overrides. default: { category: 0x0001, mask: 0xFFFFFFFF, group: 0 }
       'collision-filter-group',
       'collision-filter-mask',
-      'data-height', // number (required for 'rectangle' and 'trapezoid')
+      'data-height', // number (required for 'rectangle')
       'data-radius', // number (required for 'circle' and 'polygon')
-      'data-sides', // number (required for 'polygon')
-      'data-slope', // number (required for 'trapezoid')
-      'data-width', // number (required for 'rectangle' and 'trapezoid')
+      'data-polygon', // number (required for 'polygon')
+      'data-width', // number (required for 'rectangle')
       'data-x', // number (position coordinate)
       'data-y', // number (position coordinate)
       'density', // a number that defines the density of the body (mass per unit area)
@@ -55,7 +54,7 @@ export default class Body extends Intersection() {
       'mass', // a number that defines the mass of the body
       'restitution', // a number that defines the restitution (elasticity) of the body. The value is always positive and is in the range (0, 1
       'timeScale', // controls the speed of time for an individual physics body
-      'type' // 'circle' | 'polygon' | 'rectangle' | 'trapezoid'
+      'type' // 'circle' | 'polygon' | 'rectangle'
     ]
   }
   
@@ -82,6 +81,7 @@ export default class Body extends Intersection() {
 
     // update the css according to the matter.js physics. Also inform through yjs crdt about the changed state as well as when the body starts sleeping
     this.matterBodyEventListener = (event, sleepStart = false) => {
+      event.stopPropagation()
       const body = event.detail.body
       let initiateDoOnIntersectionOnce = () => {
         initiateDoOnIntersectionOnce = () => {}
@@ -103,12 +103,12 @@ export default class Body extends Intersection() {
       if (sleepStart) initiateDoOnIntersectionOnce()
       /*
       // NOTE: transform has better performance than top and left props
-      top: ${body.position.y - this.getAttribute('data-height-half')}px;
-      left: ${body.position.x - this.getAttribute('data-width-half')}px;
+      top: ${body.position.y - this.getAttribute('data-height-center')}px;
+      left: ${body.position.x - this.getAttribute('data-width-center')}px;
       transform: rotate(${body.angle}rad);
       */
       // NOTE: translate3d is more likely to be handed to gpu than just translate
-      const textContent = /* css */`:host {transform: translate3d(${(body.position.x - this.getAttribute('data-width-half')).toFixed(this.accuracy)}px, ${(body.position.y - this.getAttribute('data-height-half')).toFixed(this.accuracy)}px, 0) rotate(${body.angle.toFixed(this.accuracy)}rad);}`
+      const textContent = /* css */`:host {transform: translate3d(${(body.position.x - this.getAttribute('data-width-center')).toFixed(this.accuracy)}px, ${(body.position.y - this.getAttribute('data-height-center')).toFixed(this.accuracy)}px, 0) rotate(${body.angle.toFixed(this.accuracy)}rad);}`
       if (textContent !== this.customStyle.textContent) {
         this.customStyle.textContent = textContent
         initiateDoOnIntersectionOnce()
@@ -126,7 +126,7 @@ export default class Body extends Intersection() {
       this.setPointerCapture(event.pointerId)
       this.dispatchEvent(new CustomEvent(`${this.namespace}pointer-down`, {
         detail: {
-          bid: this.getAttribute('bid') || '',
+          bid: this.bid || '',
           position: {x: event.clientX, y: event.clientY}
         },
         bubbles: true,
@@ -222,11 +222,11 @@ export default class Body extends Intersection() {
     if (name === 'is-static') {
       //this.body.then(body => (body.isStatic = this.isStatic()))
     } else if (name === 'data-width' || name === 'data-height') {
-      this.setAttribute('data-width-half', this.getAttribute('data-width') / 2)
-      this.setAttribute('data-height-half', this.getAttribute('data-height') / 2)
+      this.setAttribute('data-width-center', (this.getAttribute('data-width') / 2).toFixed(this.accuracy))
+      this.setAttribute('data-height-center', (this.getAttribute('data-height') / 2).toFixed(this.accuracy))
     } else if (name === 'data-radius') {
-      this.setAttribute('data-width-half', this.getAttribute('data-radius'))
-      this.setAttribute('data-height-half', this.getAttribute('data-radius'))
+      this.setAttribute('data-width-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy))
+      this.setAttribute('data-height-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy))
     }
   }
 
@@ -282,18 +282,30 @@ export default class Body extends Intersection() {
         will-change: transform;
       }
       :host {
-        --height: attr(data-height px);
-        --width: attr(data-width px);
+        /* expl.: --height: attr(data-height px); is not supported by firefox 138 */
+        --height: ${this.getAttribute('data-height')}px;
+        --width: ${this.getAttribute('data-width')}px;
+        --radius: ${this.getAttribute('data-radius')}px;
         opacity: var(--opacity, 1);
         position: ${this.getAttribute('position') ? this.getAttribute('position') : 'var(--position, absolute)'};
         transform-origin: center;
-        transform: translate3d(attr(data-x px), attr(data-y px), 0);
+        transform: translate3d(${this.getAttribute('data-x')}px, ${this.getAttribute('data-y')}px, 0);
         transition: transform 50ms ease-out;
       }
       :host > section {
         background: ${this.getAttribute('background') ? this.getAttribute('background') : 'var(--background, #111)'};
         height: var(--height);
         width: var(--width);
+      }
+      :host(:where([type=circle], [type=polygon])) > section {
+        height: calc(var(--radius) * 2);
+        width: calc(var(--radius) * 2);
+      }
+      :host([type=circle]) > section {
+        clip-path: circle(50%);
+      }
+      :host([type=polygon]) > section {
+        clip-path: polygon(${this.getAttribute('data-polygon')}); /* not every browser supports using attr() as raw-string */
       }
     `
   }
@@ -312,24 +324,42 @@ export default class Body extends Intersection() {
     const bodyBoundingClientRect = this.getBoundingClientRect()
     if (!this.hasAttribute('data-x')) this.setAttribute('data-x', bodyBoundingClientRect.x)
     if (!this.hasAttribute('data-y')) this.setAttribute('data-y', bodyBoundingClientRect.y)
-    if (!this.hasAttribute('data-width')) this.setAttribute('data-width', bodyBoundingClientRect.width)
-    if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height)
+    if (this.getAttribute('type') === 'rectangle' && bodyBoundingClientRect.width && bodyBoundingClientRect.height) {
+      if (!this.hasAttribute('data-width')) this.setAttribute('data-width', bodyBoundingClientRect.width.toFixed(this.accuracy))
+      if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height.toFixed(this.accuracy))
+    } else if ((this.getAttribute('type') === 'circle' || this.getAttribute('type') === 'polygon') && (bodyBoundingClientRect.width || bodyBoundingClientRect.height)) {
+      if (!this.hasAttribute('data-radius')) this.setAttribute('data-radius', ((bodyBoundingClientRect.width || bodyBoundingClientRect.height) / 2).toFixed(this.accuracy))
+    }
   }
 
   addBody () {
     // the dispatch must be after rendering
-    const {args, method, error} = Body.getMethodAndArgs(this)
+    const {args, method, error, vertexSets, radius} = Body.getMethodAndArgs(this)
     if (error) {
       console.warn((this.section.textContent = error), this)
       this.setAttribute('has-error', '')
     } else {
       this.removeAttribute('has-error')
     }
+    this.globalEventTarget.addEventListener(`${this.getAttribute('matter-added-body') || 'matter-added-body'}-${this.bid}`, event => {
+      // expect matter to answer with the actual body center calculated from bounds.min before rotation
+      const x = event.detail.center.x.toFixed(this.accuracy)
+      const y = event.detail.center.y.toFixed(this.accuracy)
+      this.setAttribute('data-width-center', x)
+      this.setAttribute('data-height-center', y)
+      this.css = /* css */`
+        :host {
+          transform-origin: ${x}px ${y}px;
+        }
+      `
+    }, {once: true})
     this.dispatchEvent(new CustomEvent(this.getAttribute('matter-add-body') || 'matter-add-body', {
       detail: {
         args,
-        bid: this.getAttribute('bid'),
-        method
+        bid: this.bid,
+        method,
+        vertexSets,
+        radius
       },
       bubbles: true,
       cancelable: true,
@@ -342,13 +372,15 @@ export default class Body extends Intersection() {
    * 
    * @param {Body} webComponent
    * @return {{
-   *  args: [number, number, number, number, {webComponent:HTMLElement}|any] | [number, number, number, {webComponent:HTMLElement}|any],
+   *  args: [number, number, number, number, any] | [number, number, number, any] | [number, number, {x: number, y: number}[], any],
    *  method: 'string',
-   *  error: null
-   * } | {args: null, method: null, error: string}}
+   *  error: null,
+   *  vertexSets?: {x: number, y: number}[],
+   *  radius?: number
+   * } | {args: null, method: null, error: string, vertexSets?: {x: number, y: number}[], radius?: number}}
    */
   static getMethodAndArgs (webComponent) {
-    if (!webComponent.hasAttribute('type')) return {args: null, method: null, error: 'type of shape missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody types: "circle" | "polygon" | "rectangle" | "trapezoid" is required'}
+    if (!webComponent.hasAttribute('type')) return {args: null, method: null, error: 'type of shape missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody types: "circle" | "polygon" | "rectangle" is required'}
     const getOptions = () => {
       // custom properties
       const options = {
@@ -382,12 +414,24 @@ export default class Body extends Intersection() {
       if (webComponent.hasAttribute('mass')) options.mass = Number(webComponent.getAttribute('mass'))
       if (webComponent.hasAttribute('restitution')) options.restitution = Number(webComponent.getAttribute('restitution'))
       if (webComponent.hasAttribute('time-scale')) options.timeScale = Number(webComponent.getAttribute('time-scale'))
+      // IMPORTANT: don't change initial angle, otherwise the center calculation is going to be off
       return options
+    }
+    // TODO: check and fix func below
+    const clipPathToVertexSets = (clipPath, radius) => {
+      radius = Number(radius)
+      const num = '(-?\\d*\\.?\\d+)%?'
+      return [
+        [...clipPath.matchAll(new RegExp(`${num}\\s+${num}`, 'g'))].map(([, x, y]) => ({
+          x: (parseFloat(x) - 50) * radius / 50,
+          y: (parseFloat(y) - 50) * radius / 50
+        }))
+      ]
     }
     switch (webComponent.getAttribute('type')) {
       // TODO:  fix circle (circle has no data-width/height so do the css) and do the other shapes plus all data-attributes
       case 'circle':
-        if (!webComponent.getAttribute('data-radius')) return {args: null, method: null, error: 'Radius of shape is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+        if (!webComponent.hasAttribute('data-radius')) return {args: null, method: null, error: 'Radius of circle is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
         return {
           args: [
             Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
@@ -398,12 +442,29 @@ export default class Body extends Intersection() {
           method: webComponent.getAttribute('type'),
           error: null
         }
-      case 'rectangle':
-        if (!webComponent.getAttribute('data-width') || !webComponent.getAttribute('data-height')) return {args: null, method: null, error: 'Width or height of shape is missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+      case 'polygon':
+        if (!webComponent.hasAttribute('data-radius') || !webComponent.hasAttribute('data-polygon')) return {args: null, method: null, error: 'Radius or polygon of polygon are missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+        webComponent.setAttribute('data-width-center', 0)
+        webComponent.setAttribute('data-height-center', 0)
+        const vertexSets = clipPathToVertexSets(webComponent.getAttribute('data-polygon'), webComponent.getAttribute('data-radius'))[0]
         return {
           args: [
-            Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-width-half')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
-            Number(webComponent.getAttribute('data-y') || 0) + Number(webComponent.getAttribute('data-height-half')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-y') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            vertexSets,
+            getOptions()
+          ],
+          method: webComponent.getAttribute('type'),
+          vertexSets,
+          radius: Number(webComponent.getAttribute('data-radius')),
+          error: null
+        }
+      case 'rectangle':
+        if (!webComponent.hasAttribute('data-width') || !webComponent.hasAttribute('data-height')) return {args: null, method: null, error: 'Width or height of rectangle are missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+        return {
+          args: [
+            Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-width-center')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
+            Number(webComponent.getAttribute('data-y') || 0) + Number(webComponent.getAttribute('data-height-center')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
             Number(webComponent.getAttribute('data-width')),
             Number(webComponent.getAttribute('data-height')),
             getOptions()
@@ -412,7 +473,7 @@ export default class Body extends Intersection() {
           error: null
         }
     }
-    return {args: null, method: null, error: 'type of shape not of types: "circle" | "polygon" | "rectangle" | "trapezoid". See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+    return {args: null, method: null, error: 'type of shape not of types: "circle" | "polygon" | "rectangle". See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
   }
 
   get section () {
