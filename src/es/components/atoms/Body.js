@@ -169,51 +169,30 @@ export default class Body extends Intersection() {
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    // todo: needs to be self only and likely better uuid as additional info
     if (this.hasAttribute('self-controlled')) {
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
-      this.globalEventTarget.addEventListener('yjs-users', this.usersEventListener)
+      this.globalEventTarget.addEventListener('yjs-users', this.usersEventListener) // does execute this.addBody()
     } else {
       super.connectedCallback() // start intersection observer
       this.addBody()
     }
-    // TODO: https://www.brm.io/matter-js/docs/classes/Body.html#method_setParts set and unset parts. when setting parts first remove those part bodies from world, when unset then set them separately to world
   }
 
   disconnectedCallback () {
-    // must be dispatched from body, since this element dies before it can dispatch
-    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
-      detail: {
-        webComponent: this
-      },
-      bubbles: true,
-      cancelable: true,
-      composed: true
-    }))
-    this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-remove-body') || 'yjs-remove-body', {
-      detail: {
-        body: {
-          isSelf: this.hasAttribute('self-controlled'),
-          bid: this.bid
-        }
-      },
-      bubbles: true,
-      cancelable: true,
-      composed: true
-    }))
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
     if (this.hasAttribute('self-controlled')) {
-      this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
+      this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
     } else {
       super.disconnectedCallback()
     }
+    this.removeBody()
   }
 
   attributeChangedCallback (name, oldValue, newValue) {
@@ -362,6 +341,29 @@ export default class Body extends Intersection() {
         method,
         vertexSets,
         radius
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }))
+  }
+
+  removeBody () {
+    // must be dispatched from globalEventTarget, since this element dies before it can dispatch
+    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
+      detail: {
+        webComponent: this
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }))
+    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('yjs-remove-body') || 'yjs-remove-body', {
+      detail: {
+        body: {
+          isSelf: this.hasAttribute('self-controlled'),
+          bid: this.bid
+        }
       },
       bubbles: true,
       cancelable: true,

@@ -4,9 +4,9 @@ https://docs.yjs.dev/api/y.doc
 https://brm.io/matter-js/docs/classes/Body.html
 https://bennettfeely.com/clippy/
 
-fix bodySelectorNamespace 'b_' to also have directly the uid
-
-
+- [ ] camera see below
+- [ ] fix bodySelectorNamespace 'b_' to also have directly the uid
+- [ ] src/es/components/atoms/Body.js https://www.brm.io/matter-js/docs/classes/Body.html#method_setParts set and unset parts. when setting parts first remove those part bodies from world, when unset then set them separately to world
 --------
 
 
