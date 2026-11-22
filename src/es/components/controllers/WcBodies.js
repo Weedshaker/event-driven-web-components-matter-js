@@ -63,7 +63,7 @@ export default class WcBodies extends WebWorker() {
         return acc
       }, [])
       if (keys.length) {
-        this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}matter-bodies`) || `${this.namespace}matter-bodies`, {
+        this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}wc-bodies`) || `${this.namespace}wc-bodies`, {
           detail: {
             keys: keys.map(key => ({
               key,
@@ -145,9 +145,9 @@ export default class WcBodies extends WebWorker() {
     this.globalEventTarget.addEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce, {once: true})
     this.globalEventTarget.addEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
     this.globalEventTarget.addEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce, {once: true})
-    this.globalEventTarget.addEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
-    this.globalEventTarget.addEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
-    this.globalEventTarget.addEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}wc-bodies-observe`, this.bodiesObserveEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}wc-set-body`, this.setBodyEventListener)
+    this.globalEventTarget.addEventListener(`${this.namespace}wc-remove-body`, this.removeBodyEventListener)
     if (this.isConnected) this.connectedCallbackOnce()
   }
 
@@ -156,7 +156,7 @@ export default class WcBodies extends WebWorker() {
       detail: {
         command: 'getMap',
         arguments: ['bodies'],
-        observe: `${this.namespace}bodies-observe`,
+        observe: `${this.namespace}wc-bodies-observe`,
         observeDeep: true,
         resolve: this.yMapResolve
       },
@@ -172,9 +172,9 @@ export default class WcBodies extends WebWorker() {
     this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-change`, this.awarenessChangeEventListenerOnce)
     this.globalEventTarget.removeEventListener(`${this.namespace}websocket-awareness-update`, this.awarenessChangeEventListenerOnce)
     this.globalEventTarget.removeEventListener(`${this.namespace}webrtc-awareness-update`, this.awarenessChangeEventListenerOnce)
-    this.globalEventTarget.removeEventListener(`${this.namespace}bodies-observe`, this.bodiesObserveEventListener)
-    this.globalEventTarget.removeEventListener(`${this.namespace}set-body`, this.setBodyEventListener)
-    this.globalEventTarget.removeEventListener(`${this.namespace}remove-body`, this.removeBodyEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}wc-bodies-observe`, this.bodiesObserveEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}wc-set-body`, this.setBodyEventListener)
+    this.globalEventTarget.removeEventListener(`${this.namespace}wc-remove-body`, this.removeBodyEventListener)
   }
 
   /**

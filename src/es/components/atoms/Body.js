@@ -6,7 +6,10 @@
  @typedef {{
   namespace?: string, // namespace the events dispatched
   bid?: string // every class is going to possess a unique bid,
-  accuracy?: number // the fixedTo rounding on css transition values
+  accuracy?: {
+    position: number,
+    rotation: number // max accuracy for rotation is 2, this is capped by src/es/components/controllers/MatterWebWorker.js mapBodyToYjsMatterBody to avoid -0.00 not matching 0.00
+  } // the fixedTo rounding on css transition values
  }} options
 */
 
@@ -24,7 +27,7 @@ export const bodySelectorNamespace = 'b_'
  * Web Component Body does:
  *  - command class Matter regarding physics (../controllers/Matter.js) by dispatching Events: matter-add-body, matter-remove-body, matter-command-body
  *  - command class Matter regarding physics drag (../controllers/Matter.js) by dispatching Events: wc-body-pointer-down, wc-body-pointer-move, wc-body-pointer-up
- *  - command class Bodies regarding yjs CRDT synchronization (../controllers/Bodies.js) by dispatching Events: yjs-set-body, yjs-remove-body
+ *  - command class Bodies regarding yjs CRDT synchronization (../controllers/Bodies.js) by dispatching Events: yjs-matter-set-body, yjs-matter-remove-body
  *  - reflect physics from Event: matter-bodies, dispatched by class Matter (../controllers/Matter.js), through CSS by the matter-body coordinates (transform: translate3d(x, y, rotate))
  *
  * @export
@@ -76,8 +79,14 @@ export default class Body extends Intersection() {
     else if (!this.bid) this.bid = `${bodySelectorNamespace}${self.crypto.randomUUID()}`
 
     // The accuracy for the css number values at transform translate3d toFixed
+    // change accuracy to make less calls to MatterBodies.js yjs network
     if (options.accuracy) this.accuracy = options.accuracy
-    else if (!this.accuracy) this.accuracy = 2
+    else if (!this.accuracy) this.accuracy = this.hasAttribute('accuracy')
+      ? JSON.parse(this.getAttribute('accuracy'))
+      : {
+        position: 1,
+        rotation: 2
+      }
 
     // update the css according to the matter.js physics. Also inform through yjs crdt about the changed state as well as when the body starts sleeping
     this.matterBodyEventListener = (event, sleepStart = false) => {
@@ -86,7 +95,7 @@ export default class Body extends Intersection() {
       let initiateDoOnIntersectionOnce = () => {
         initiateDoOnIntersectionOnce = () => {}
         this.doOnIntersection = () => {
-          this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-set-body') || 'yjs-set-body', {
+          this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-set-body') || 'yjs-matter-set-body', {
             detail: {
               /** @type {import('../controllers/MatterBodies.js').MatterBody} */
               body
@@ -108,7 +117,7 @@ export default class Body extends Intersection() {
       transform: rotate(${body.angle}rad);
       */
       // NOTE: translate3d is more likely to be handed to gpu than just translate
-      const textContent = /* css */`:host {transform: translate3d(${(body.position.x - this.getAttribute('data-width-center')).toFixed(this.accuracy)}px, ${(body.position.y - this.getAttribute('data-height-center')).toFixed(this.accuracy)}px, 0) rotate(${body.angle.toFixed(this.accuracy)}rad);}`
+      const textContent = /* css */`:host {transform: translate3d(${(body.position.x - this.getAttribute('data-width-center')).toFixed(this.accuracy.position)}px, ${(body.position.y - this.getAttribute('data-height-center')).toFixed(this.accuracy.position)}px, 0) rotate(${body.angle.toFixed(this.accuracy.rotation)}rad);}`
       if (textContent !== this.customStyle.textContent) {
         this.customStyle.textContent = textContent
         initiateDoOnIntersectionOnce()
@@ -201,11 +210,11 @@ export default class Body extends Intersection() {
     if (name === 'is-static') {
       //this.body.then(body => (body.isStatic = this.isStatic()))
     } else if (name === 'data-width' || name === 'data-height') {
-      this.setAttribute('data-width-center', (this.getAttribute('data-width') / 2).toFixed(this.accuracy))
-      this.setAttribute('data-height-center', (this.getAttribute('data-height') / 2).toFixed(this.accuracy))
+      this.setAttribute('data-width-center', (this.getAttribute('data-width') / 2).toFixed(this.accuracy.rotation))
+      this.setAttribute('data-height-center', (this.getAttribute('data-height') / 2).toFixed(this.accuracy.rotation))
     } else if (name === 'data-radius') {
-      this.setAttribute('data-width-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy))
-      this.setAttribute('data-height-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy))
+      this.setAttribute('data-width-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy.rotation))
+      this.setAttribute('data-height-center', Number(this.getAttribute('data-radius')).toFixed(this.accuracy.rotation))
     }
   }
 
@@ -306,8 +315,8 @@ export default class Body extends Intersection() {
     if (!this.hasAttribute('data-x')) this.setAttribute('data-x', bodyBoundingClientRect.x)
     if (!this.hasAttribute('data-y')) this.setAttribute('data-y', bodyBoundingClientRect.y)
     if (this.getAttribute('type') === 'rectangle' && bodyBoundingClientRect.width && bodyBoundingClientRect.height) {
-      if (!this.hasAttribute('data-width')) this.setAttribute('data-width', bodyBoundingClientRect.width.toFixed(this.accuracy))
-      if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height.toFixed(this.accuracy))
+      if (!this.hasAttribute('data-width')) this.setAttribute('data-width', bodyBoundingClientRect.width.toFixed(this.accuracy.rotation))
+      if (!this.hasAttribute('data-height')) this.setAttribute('data-height', bodyBoundingClientRect.height.toFixed(this.accuracy.rotation))
     } else if ((this.getAttribute('type') === 'circle' || this.getAttribute('type') === 'polygon') && (bodyBoundingClientRect.width || bodyBoundingClientRect.height)) {
       if (!this.hasAttribute('data-radius')) this.setAttribute('data-radius', ((bodyBoundingClientRect.width || bodyBoundingClientRect.height) / 2).toFixed(this.accuracy))
     }
@@ -324,8 +333,8 @@ export default class Body extends Intersection() {
     }
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-added-body') || 'matter-added-body'}-${this.bid}`, event => {
       // expect matter to answer with the actual body center calculated from bounds.min before rotation
-      const x = event.detail.center.x.toFixed(this.accuracy)
-      const y = event.detail.center.y.toFixed(this.accuracy)
+      const x = event.detail.center.x.toFixed(this.accuracy.position)
+      const y = event.detail.center.y.toFixed(this.accuracy.position)
       this.setAttribute('data-width-center', x)
       this.setAttribute('data-height-center', y)
       this.css = /* css */`
@@ -349,19 +358,20 @@ export default class Body extends Intersection() {
   }
 
   removeBody () {
-    // must be dispatched from globalEventTarget, since this element dies before it can dispatch
-    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
+    // TODO: next continue here!
+    // must be dispatched from parentElement, since this element dies before it can dispatch
+    this.parentElement.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
       detail: {
-        webComponent: this
+        bid: this.bid
       },
       bubbles: true,
       cancelable: true,
       composed: true
     }))
-    this.globalEventTarget.dispatchEvent(new CustomEvent(this.getAttribute('yjs-remove-body') || 'yjs-remove-body', {
+    // at 
+    this.parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-remove-body') || 'yjs-matter-remove-body', {
       detail: {
         body: {
-          isSelf: this.hasAttribute('self-controlled'),
           bid: this.bid
         }
       },
@@ -528,23 +538,6 @@ export default class Body extends Intersection() {
   get bid () {
     // @ts-ignore
     return this.getAttribute('bid')
-  }
-
-  /**
-   * The accuracy for the css number values at transform translate3d toFixed
-   *
-   * @param {number} value
-   */
-  set accuracy (value) {
-    if (value) this.setAttribute('accuracy', value)
-  }
-
-  /**
-   * @return {number}
-   */
-  get accuracy () {
-    // @ts-ignore
-    return this.getAttribute('accuracy')
   }
 
   get globalEventTarget () {

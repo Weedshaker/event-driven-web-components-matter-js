@@ -214,7 +214,7 @@ export default class MatterWebWorker {
    */
   static mapBodyToYjsMatterBody (body) {
     return {
-      angle: body.angle,
+      angle: Math.abs(body.angle) < 0.005 ? 0 : body.angle, // avoid -0.00 not matching 0.00, capping angle accuracy at 2
       angularVelocity: body.angularVelocity,
       bid: body.bid,
       collisions: body.collisions,
