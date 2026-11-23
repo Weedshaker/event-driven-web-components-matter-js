@@ -22,7 +22,7 @@ import { bodySelectorNamespace } from '../atoms/Body.js'
   sides: number,
   timeScale: number,
   type: 'circle' | 'polygon' | 'rectangle',
-  uid: string | '', // the uid is set when a user controls this body
+  uid: string | '', // the uid is set when a user controls this body attr user-controlled
   width: number
 }} WcBody
 */

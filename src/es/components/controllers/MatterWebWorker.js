@@ -61,13 +61,11 @@ export default class MatterWebWorker {
         // todo: add full collision info and adjust MatterBody interface
         bodyA.collisions.unshift({
           bid: bodyB.bid,
-          uid: bodyB.uid,
           // todo: is ground as func?
           isGround: pair.collision.normal.y < -0.5
         })
         bodyB.collisions.unshift({
           bid: bodyA.bid,
-          uid: bodyA.uid,
           isGround: pair.collision.normal.y > 0.5
         })
       }
@@ -222,7 +220,7 @@ export default class MatterWebWorker {
       isSleeping: body.isSleeping,
       isStatic: body.isStatic,
       position: body.position,
-      uid: body.uid,
+      ctrl: body.ctrl,
       velocity: body.velocity
     }
   }

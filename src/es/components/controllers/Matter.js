@@ -200,14 +200,14 @@ export default class MatterElement extends HTMLElement {
     this.matterBodiesEventListener = async event => {
       // TODO: a separate controller as a factory for the web components is required
       const bodies = []
-      event.detail.keys.forEach(async ({key, isSelf, getBody}) => {
-        if (isSelf) return
+      event.detail.keys.forEach(async ({key, getBody}) => {
+        // TODO: incorporate isSelf on keys obj
         const body = getBody()
         bodies.push(body)
         let webComponent
         if (webComponentMap.has(key)) {
           webComponent = await webComponentMap.get(key)
-        } else if ((webComponent = this.querySelector(`[bid="${body.bid}"]`))) {
+        } else if ((webComponent = this.querySelector(`[bid="${key}"]`))) {
           webComponentMap.set(key, Promise.resolve(webComponent))
         } else {
           let resolveWebComponent
@@ -217,8 +217,9 @@ export default class MatterElement extends HTMLElement {
           webComponent.setAttribute('type', 'rectangle')
           webComponent.setAttribute('data-x', body.position.x)
           webComponent.setAttribute('data-y', body.position.y)
-          webComponent.setAttribute('bid', body.bid)
-          webComponent.setAttribute('uid', body.uid)
+          webComponent.setAttribute('bid', key)
+          webComponent.setAttribute('uid', body.ctrl.uid)
+          webComponent.setAttribute('origin', 'yjs')
           if (body.isStatic) webComponent.setAttribute('is-static', '')
           // TODO: make dynamic width, height, shape
           webComponent.setAttribute('data-width', '50')

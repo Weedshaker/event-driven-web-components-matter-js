@@ -2,10 +2,16 @@
 /* global self */
 
 /**
+ * origin of the web component. Depends on the factory, default: preset
+ @typedef {'yjs' | 'event' | 'preset'} origin
+*/
+
+/**
  * Constructor options
  @typedef {{
   namespace?: string, // namespace the events dispatched
   bid?: string // every class is going to possess a unique bid,
+  origin: origin,
   accuracy?: {
     position: number,
     rotation: number // max accuracy for rotation is 2, this is capped by src/es/components/controllers/MatterWebWorker.js mapBodyToYjsMatterBody to avoid -0.00 not matching 0.00
@@ -70,7 +76,7 @@ export default class Body extends Intersection() {
    * @param {options} [options = {namespace=undefined, bid=undefined}]
    * @param {*} args
    */
-  constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined }, ...args) {
+  constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined, origin: 'preset' }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
     // set attribute namespace
@@ -80,6 +86,10 @@ export default class Body extends Intersection() {
     // unique body id used to identify at yjs and matter.js
     if (options.bid) this.bid = options.bid
     else if (!this.bid) this.bid = `${bodySelectorNamespace}${self.crypto.randomUUID()}`
+
+    // the bodies origin, usually set by the factory
+    if (options.origin) this.origin = options.origin
+    else if (!this.origin) this.origin = 'preset'
 
     // The accuracy for the css number values at transform translate3d toFixed
     // change accuracy to make less calls to MatterBodies.js yjs network
@@ -110,7 +120,7 @@ export default class Body extends Intersection() {
           this.doOnIntersection = null
         }
         // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
-        if (this.hasAttribute('intersecting') || this.hasAttribute('self-controlled')) this.doOnIntersection()
+        if (this.hasAttribute('intersecting') || this.hasAttribute('user-controlled')) this.doOnIntersection()
       }
       if (sleepStart) initiateDoOnIntersectionOnce()
       /*
@@ -181,7 +191,7 @@ export default class Body extends Intersection() {
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    if (this.hasAttribute('self-controlled')) {
+    if (this.hasAttribute('user-controlled')) {
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
@@ -203,7 +213,7 @@ export default class Body extends Intersection() {
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    if (this.hasAttribute('self-controlled')) {
+    if (this.hasAttribute('user-controlled')) {
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
@@ -268,10 +278,10 @@ export default class Body extends Intersection() {
       :host([has-error]) {
         color: red;
       }
-      :host(:not([intersecting]):not([self-controlled])) > section {
+      :host(:not([intersecting]):not([user-controlled])) > section {
         display: none;
       }
-      :host([self-controlled]) {
+      :host([user-controlled]) {
         cursor: ${this.getAttribute('cursor') ? this.getAttribute('cursor') : 'var(--cursor, move)'};
         transition: none;
       }
@@ -377,13 +387,12 @@ export default class Body extends Intersection() {
       cancelable: true,
       composed: true
     }))
-    // TODO: next continue here!
-    // at 
+    // TODO: next continue here (the below only removes body on yjs-matter-remove-body also do yjs-wc-remove-body to control factory [add-body has to be done as well], then check the clearing of both yMap's)
+    // TODO: doe this logic src/es/components/controllers/MatterBodies.js.removeBodyEventListener here at one place
     this.#parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-remove-body') || 'yjs-matter-remove-body', {
       detail: {
-        body: {
-          bid: this.bid
-        }
+        bid: this.bid,
+        origin: this.origin
       },
       bubbles: true,
       cancelable: true,
@@ -409,7 +418,10 @@ export default class Body extends Intersection() {
       // custom properties
       const options = {
         bid: webComponent.getAttribute('bid') || '',
-        uid: webComponent.getAttribute('uid') || '',
+        ctrl: {
+          uid: webComponent.getAttribute('uid') || '',
+          userControlled: webComponent.hasAttribute('user-controlled')
+        },
         collisions: []
       }
       const requireCollisionFilterProp = () => {
@@ -548,6 +560,23 @@ export default class Body extends Intersection() {
   get bid () {
     // @ts-ignore
     return this.getAttribute('bid')
+  }
+
+  /**
+   * The body origin is set by it's creator
+   *
+   * @param {origin} value
+   */
+  set origin (value) {
+    if (value) this.setAttribute('origin', value)
+  }
+
+  /**
+   * @return {origin}
+   */
+  get origin () {
+    // @ts-ignore
+    return this.getAttribute('origin')
   }
 
   get globalEventTarget () {

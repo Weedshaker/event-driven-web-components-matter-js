@@ -7,20 +7,19 @@ import { bodySelectorNamespace } from '../atoms/Body.js'
  @typedef {{
   angle: number,
   angularVelocity: number,
-  bid: string,
+  bid: string, // bid is not inside the CRDT map value, since key === bid
   collisions: {
     bid: string,
-    uid: string | undefined,
     isGround: boolean
   }[],
   ctrl?: {
     uid: string | '',
-    timestamp: number
+    timestamp?: number,
+    userControlled?: boolean
   },
   isSleeping: boolean,
   isStatic: boolean,
   position: {x: number, y: number},
-  uid: string | '', // the uid is set when a user controls this body
   velocity: { x: number, y: number }
 }} MatterBody
 */
@@ -56,7 +55,7 @@ export default class MatterBodies extends WebWorker() {
       const keys = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).reduce((acc, [key]) => {
         if (!event.detail.type.has(key)) return acc
         const body = event.detail.type.get(key)
-        if (body.uid === uid || body.ctrl?.uid === uid) return acc
+        if (body.ctrl.uid === uid) return acc
         acc.push(key)
         return acc
       }, [])
@@ -66,7 +65,7 @@ export default class MatterBodies extends WebWorker() {
             keys: keys.map(key => ({
               key,
               isSelf: key === uid,
-              getBody: () => event.detail.type.get(key)
+              getBody: () => ({...event.detail.type.get(key), bid: key})
             }))
           },
           bubbles: true,
@@ -80,25 +79,26 @@ export default class MatterBodies extends WebWorker() {
     const bodyTransactions = new Map()
     let animationFrameId = null
     this.setBodyEventListener = async event => {
-      // TODO: also sync static bodies
-      // TODO: make this more flexible with ctrl. when !event.detail.isSelf && event.detail.body.uid don't just not treat it but make it smarter through ctrl
+      // TODO: also sync static bodies (does WcBodies.js)
+      // TODO: make this more flexible with ctrl. when !event.detail.isSelf && event.detail.body.ctrl.uid don't just not treat it but make it smarter through ctrl
       // don't deal with other user bodies as well as with static bodies
       const uid = await this.uid
-      const isSelf = uid === event.detail.body.uid
-      if (!isSelf && (event.detail.body.isStatic || event.detail.body.uid)) return
-      let key, body
+      const isSelf = event.detail.body.ctrl.userControlled && uid === event.detail.body.ctrl.uid
+      if (!isSelf && (event.detail.body.ctrl.userControlled || event.detail.body.isStatic)) return
+      const key = event.detail.body.bid
+      // bid is already the map key for this body, so we remove this for the CRDT and readd it at getBody
+      delete event.detail.body.bid
+      let body
       if (isSelf) {
-        bodyTransactions.set(event.detail.body.bid, event.detail.body)
+        bodyTransactions.set(key, event.detail.body)
         if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
       } else if (
-        (key = event.detail.body.bid)
-        && (
         !(await this.yMap).type.has(key)
-        || !(body = (await this.yMap).type.get(key)).ctrl
+        || !(body = (await this.yMap).type.get(key)).ctrl.uid
         || body.ctrl.uid === uid
         || await this.webWorker(detectCollision, event.detail.body.collisions, uid, body.ctrl.uid)
-        || body.ctrl.timestamp + 1000 < Date.now()
-      )) {
+        || body.ctrl.timestamp && (body.ctrl.timestamp + 1000 < Date.now())
+      ) {
         // all bodies without a uid
         bodyTransactions.set(key, {...event.detail.body, ctrl: {
           uid,
@@ -119,12 +119,12 @@ export default class MatterBodies extends WebWorker() {
     }
 
     this.removeBodyEventListener = async event => {
-      // TODO: Decide how to handle !isSelf elements
-      const isSelf = await this.uid === event.detail.body.uid
-      if (!isSelf) return
-      const yMap = (await this.yMap).type
-      // TODO: add remove capabilities
-      //yMap.remove(event.detail.body.bid)
+      if (!(await this.yMap).type.has(event.detail.bid)) return
+      let body
+      if (!(body = (await this.yMap).type.get(event.detail.bid))) return
+      if (body.ctrl.userControlled && await this.uid !== body.ctrl.uid) return
+      // TODO: decide further rules by event.detail.origin ('yjs' | 'event' | 'preset')
+      (await this.yMap).type.delete(event.detail.bid)
     }
 
     /** @type {(any)=>void} */
@@ -134,6 +134,7 @@ export default class MatterBodies extends WebWorker() {
 
     /** @type {(any)=>void} */
     this.yMapResolve = map => map
+    // yMap holds MatterBody as value without bid
     /** @type {Promise<{type: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs.js").Map, doc: import("../../event-driven-web-components-yjs/src/es/dependencies/yjs.js").Doc}>} */
     this.yMap = new Promise(resolve => (this.yMapResolve = resolve))
   }
