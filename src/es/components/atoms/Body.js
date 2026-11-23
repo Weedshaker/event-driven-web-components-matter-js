@@ -60,6 +60,9 @@ export default class Body extends Intersection() {
       'type' // 'circle' | 'polygon' | 'rectangle'
     ]
   }
+
+  /** @type {HTMLElement | null} */
+  #parentElement = null
   
   /**
    * Creates an instance of Body. The constructor will be called for every custom element using this class when initially created.
@@ -163,7 +166,7 @@ export default class Body extends Intersection() {
       if (this.hasPointerCapture(event.pointerId)) this.releasePointerCapture(event.pointerId)
     }
 
-    this.usersEventListener = async event => {
+    this.usersEventListener = event => {
       if (event.detail.selfUser?.uid) {
         this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
         this.setAttribute('uid', `${bodySelectorNamespace}${JSON.parse(event.detail.selfUser.uid).uuid}`)
@@ -182,11 +185,18 @@ export default class Body extends Intersection() {
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
-      this.globalEventTarget.addEventListener('yjs-users', this.usersEventListener) // does execute this.addBody()
+      if (this.isConnected) new Promise(resolve => this.dispatchEvent(new CustomEvent('yjs-get-users-event-detail', {
+        detail: { resolve },
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      }))).then(detail => this.usersEventListener({detail}))
     } else {
       super.connectedCallback() // start intersection observer
       this.addBody()
     }
+    // keep this reference for dispatching when disconnected
+    if (this.isConnected) this.#parentElement = this.parentElement
   }
 
   disconnectedCallback () {
@@ -197,7 +207,6 @@ export default class Body extends Intersection() {
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
-      this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
     } else {
       super.disconnectedCallback()
     }
@@ -358,9 +367,9 @@ export default class Body extends Intersection() {
   }
 
   removeBody () {
-    // TODO: next continue here!
+    if (!this.#parentElement) return
     // must be dispatched from parentElement, since this element dies before it can dispatch
-    this.parentElement.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
+    this.#parentElement.dispatchEvent(new CustomEvent(this.getAttribute('matter-remove-body') || 'matter-remove-body', {
       detail: {
         bid: this.bid
       },
@@ -368,8 +377,9 @@ export default class Body extends Intersection() {
       cancelable: true,
       composed: true
     }))
+    // TODO: next continue here!
     // at 
-    this.parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-remove-body') || 'yjs-matter-remove-body', {
+    this.#parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-remove-body') || 'yjs-matter-remove-body', {
       detail: {
         body: {
           bid: this.bid
@@ -431,7 +441,7 @@ export default class Body extends Intersection() {
       // IMPORTANT: don't change initial angle, otherwise the center calculation is going to be off
       return options
     }
-    // TODO: check and fix func below
+    // TODO: check func below
     const clipPathToVertexSets = (clipPath, radius) => {
       radius = Number(radius)
       const num = '(-?\\d*\\.?\\d+)%?'

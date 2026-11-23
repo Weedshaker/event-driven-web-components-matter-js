@@ -103,6 +103,7 @@ export default class MatterElement extends HTMLElement {
           bodies = event.data.bodies
           if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => {
             if (!bodies) return
+            //self.bodies = bodies
             bodies.forEach(body => {
               if (!body.isSleeping && !body.isStatic) this.dispatchEvent(new CustomEvent(`${this.namespace}body-${body.bid}`, {
                 detail: {
@@ -153,7 +154,6 @@ export default class MatterElement extends HTMLElement {
     }
 
     this.addBodyEventListener = event => {
-      let webComponent = null
       if (event && event.detail && event.detail.args && event.detail.bid && event.detail.method) {
         this.worker.postMessage({
           type: 'addBody',
@@ -167,10 +167,12 @@ export default class MatterElement extends HTMLElement {
     }
 
     this.removeBodyEventListener = event => {
-      /*let webComponent = null
-      if (event && event.detail && (webComponent = event.detail.webComponent) && typeof webComponent.body?.then === 'function') {
-        webComponent.body.then(body => Matter.Composite.remove(this.engine.world, body))
-      }*/
+      if (event && event.detail && event.detail.bid) {
+        this.worker.postMessage({
+          type: 'removeBody',
+          bid: event.detail.bid
+        })
+      }
     }
 
     this.bodyPointerDownEventListener = event => {

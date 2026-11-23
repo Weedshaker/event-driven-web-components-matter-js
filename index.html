@@ -35,11 +35,11 @@
     self.Environment = {trackers: []}
     Promise.all([
       // Helpers
-      import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
-      import('./src/es/components/atoms/Body.js').then(module => ['a-body', module.default]),
       import('./src/es/event-driven-web-components-yjs/src/es/EventDrivenYjs.js').then(module => ['c-event-driven-yjs', module.EventDrivenYjs()]),
       import('./src/es/event-driven-web-components-yjs/src/es/controllers/Users.js').then(module => ['c-users', module.Users()]),
       import('./src/es/components/controllers/MatterBodies.js').then(module => ['c-matter-bodies', module.default]),
+      import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
+      import('./src/es/components/atoms/Body.js').then(module => ['a-body', module.default]),
     ]).then(elements => elements.forEach(element => {
       // don't define already existing customElements
       if (element && !customElements.get(element[0])) customElements.define(...element)

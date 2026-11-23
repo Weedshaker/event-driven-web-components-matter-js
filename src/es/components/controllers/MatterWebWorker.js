@@ -128,15 +128,12 @@ export default class MatterWebWorker {
       this.bidToMatterIdMap.set(event.data.bid, body.id)
     }
 
-    // TODO: on remove also remove this body as a collision!
-    // this.removeBodyEventListener = event => {
-    //   let webComponent = null
-    //   if (event && event.detail && (webComponent = event.detail.webComponent) && typeof webComponent.body?.then === 'function') {
-    //     this.matterEnginePromise.then(([Matter, engine]) => {
-    //       webComponent.body.then(body => Matter.Composite.remove(engine.world, body))
-    //     })
-    //   }
-    // }
+    this.removeBodyEventListener = event => {
+      if (!this.bidToMatterIdMap.has(event.data.bid)) return
+      const body = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(event.data.bid), 'body')
+      if (!body) return
+      Matter.Composite.remove(this.engine.world, body)
+    }
 
     this.tick(() => {
       if (this.canUpdate) Matter.Engine.update(this.engine)
@@ -171,8 +168,12 @@ export default class MatterWebWorker {
       case 'addBody':
         this.addBodyEventListener(event)
         break
+      case 'removeBody':
+        this.removeBodyEventListener(event)
+        break
       case 'bodyPointerDown':
         if (this.dragConstraint) Matter.Composite.remove(this.engine.world, this.dragConstraint)
+        if (!this.bidToMatterIdMap.has(event.data.bid)) return
         const bodyA = Matter.Composite.get(this.engine.world, this.bidToMatterIdMap.get(event.data.bid), 'body')
         if (!bodyA) return
         this.dragConstraint = Matter.Constraint.create({
