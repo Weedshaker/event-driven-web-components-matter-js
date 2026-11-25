@@ -5,6 +5,27 @@ import Matter from '../../dependencies/matter.min.js'
 import decomp from '../../dependencies/poly-decomp.min.js'
 Matter.Common.setDecomp(decomp)
 
+/**
+ * web component attribute controlled props
+ @typedef {{
+  collisionFilter: {
+    category?: import('./Matter.js').CollisionCategory,
+    mask?: import('./Matter.js').CollisionCategory,
+    group?: number
+  },
+  density?: number,
+  frictionAir?: number,
+  frictionStatic?: number,
+  friction?: number,
+  inertia?: number,
+  isSensor: boolean,
+  isStatic: boolean,
+  mass?: number,
+  restitution?: number,
+  timeScale?: number
+}} MatterBodyOptions
+*/
+
 /***
  * Yjs CRDT representative of the Bodies from matter.js
  * https://github.com/liabru/matter-js
@@ -86,10 +107,7 @@ export default class MatterWebWorker {
 
     this.bidToMatterIdMap = new Map()
     this.addBodyEventListener = event => {
-      const body = Matter.Bodies[event.data.method === 'polygon'
-        ? 'fromVertices'
-        : event.data.method
-      ](...event.data.args)
+      const body = Matter.Bodies[event.data.method](...event.data.args)
       let center = {
         x: body.position.x - body.bounds.min.x,
         y: body.position.y - body.bounds.min.y

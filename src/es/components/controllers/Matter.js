@@ -197,43 +197,10 @@ export default class MatterElement extends HTMLElement {
     }
 
     const webComponentMap = new Map()
-    this.matterBodiesEventListener = async event => {
-      // TODO: a separate controller as a factory for the web components is required
-      const bodies = []
-      event.detail.keys.forEach(async ({key, getBody}) => {
-        // TODO: incorporate isSelf on keys obj
-        const body = getBody()
-        bodies.push(body)
-        let webComponent
-        if (webComponentMap.has(key)) {
-          webComponent = await webComponentMap.get(key)
-        } else if ((webComponent = this.querySelector(`[bid="${key}"]`))) {
-          webComponentMap.set(key, Promise.resolve(webComponent))
-        } else {
-          let resolveWebComponent
-          webComponentMap.set(key, new Promise(resolve => (resolveWebComponent = resolve)))
-          const module = await import(`${this.importMetaUrl}../atoms/Body.js`)
-          webComponent = new module.default
-          webComponent.setAttribute('type', 'rectangle')
-          webComponent.setAttribute('data-x', body.position.x)
-          webComponent.setAttribute('data-y', body.position.y)
-          webComponent.setAttribute('bid', key)
-          webComponent.setAttribute('uid', body.ctrl.uid)
-          webComponent.setAttribute('origin', 'yjs')
-          if (body.isStatic) webComponent.setAttribute('is-static', '')
-          // TODO: make dynamic width, height, shape
-          webComponent.setAttribute('data-width', '50')
-          webComponent.setAttribute('data-height', '50')
-          this.appendChild(webComponent)
-          // @ts-ignore
-          resolveWebComponent(webComponent)
-        }
-      })
-      this.worker.postMessage({
-        type: 'matterBodies',
-        bodies
-      })
-    }
+    this.matterBodiesEventListener = event => this.worker.postMessage({
+      type: 'matterBodies',
+      bodies: event.detail.keys.map(({getBody}) => getBody())
+    })
   }
 
   connectedCallback () {

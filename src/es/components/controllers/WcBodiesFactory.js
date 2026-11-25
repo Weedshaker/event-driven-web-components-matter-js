@@ -1,0 +1,89 @@
+// @ts-check
+/* global self */
+
+/***
+ * Web Component Bodies Factory
+ * creates a-body
+ *
+ * @export
+ * @class Factory
+ * @type {CustomElementConstructor}
+ * @param {any} [options = {namespace=undefined}]
+ * @param {*} args
+ */
+export default class WcBodiesFactory extends HTMLElement {
+  constructor (options = { namespace: undefined }, ...args) {
+    super()
+
+    // set attribute namespace
+    if (options.namespace) this.namespace = options.namespace
+    else if (!this.namespace) this.namespace = 'matter-'
+
+    this.importMetaUrl = import.meta.url.replace(/(.*\/)(.*)$/, '$1')
+
+    /** @param {CustomEvent<{keysAction: {key: string, value: 'add' | 'update' | 'delete', getBody: () => import('./WcBodies').WcBody}[]}>} event */
+    this.wcBodiesEventListener = async event => {
+      event.detail.keysAction.forEach(async ({key, value, getBody}) => {
+        switch (value) {
+          case 'add':
+            const body = getBody()
+            let webComponent
+            if (!this.querySelector(`[bid="${key}"]`)) {
+              const module = await import(`${this.importMetaUrl}../atoms/Body.js`)
+              webComponent = new module.default
+              webComponent.setAttribute('type', 'rectangle')
+              webComponent.setAttribute('data-x', body.position.x)
+              webComponent.setAttribute('data-y', body.position.y)
+              webComponent.setAttribute('bid', key)
+              webComponent.setAttribute('uid', body.ctrl.uid)
+              webComponent.setAttribute('origin', 'yjs')
+              if (body.isStatic) webComponent.setAttribute('is-static', '')
+              // TODO: make dynamic width, height, shape
+              webComponent.setAttribute('data-width', '50')
+              webComponent.setAttribute('data-height', '50')
+              this.appendChild(webComponent)
+            }
+            break
+          case 'update':
+            
+            break
+          case 'delete':
+            
+            break
+        }
+      })
+    }
+  }
+
+  connectedCallback () {
+    // TODO: Listen to controller/users for mutually connected users, so that user-controlled elements are removed when no mutual connection
+    this.globalEventTarget.addEventListener(this.getAttribute('yjs-wc-bodies') || 'yjs-wc-bodies', this.wcBodiesEventListener)
+  }
+
+  disconnectedCallback () {
+    this.globalEventTarget.removeEventListener(this.getAttribute('yjs-wc-bodies') || 'yjs-wc-bodies', this.wcBodiesEventListener)
+  }
+
+  /**
+   * The namespace is prepended to the custom event names
+   * priority of value appliance: options, attribute
+   *
+   * @param {string} value
+   */
+  set namespace (value) {
+    if (value) this.setAttribute('namespace', value)
+  }
+
+  /**
+   * @return {string}
+   */
+  get namespace () {
+    // @ts-ignore
+    return this.getAttribute('namespace')
+  }
+
+  get globalEventTarget () {
+    // @ts-ignore
+    return this._globalEventTarget || (this._globalEventTarget = self.Environment?.activeRoute || document.body)
+  }
+}

@@ -7,15 +7,15 @@ import { bodySelectorNamespace } from '../atoms/Body.js'
  @typedef {{
   angle: number,
   angularVelocity: number,
-  bid: string, // bid is not inside the CRDT map value, since key === bid
+  bid?: string, // bid is not inside the CRDT map value, since key === bid
   collisions: {
     bid: string,
     isGround: boolean
   }[],
-  ctrl?: {
+  ctrl: {
     uid: string | '',
-    timestamp?: number,
-    userControlled?: boolean
+    timestamp?: number, // timestamp is a value for userControlled === false, then after some delay the control can change to other client
+    userControlled: boolean
   },
   isSleeping: boolean,
   isStatic: boolean,
@@ -52,10 +52,13 @@ export default class MatterBodies extends WebWorker() {
 
     this.bodiesObserveEventListener = async event => {
       const uid = await this.uid
-      const keys = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).reduce((acc, [key]) => {
+      // Array.from Map with key (bid) and value {action: "add" | "update" | "delete" | etc. see yjs doc}
+      const keys = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).reduce((acc, [key, value]) => {
+        if (value.action === 'delete') return acc
         if (!event.detail.type.has(key)) return acc
         const body = event.detail.type.get(key)
-        if (body.ctrl.uid === uid) return acc
+        if (!body) return acc
+        if (body.ctrl.uid === uid) return acc // the client in ctrl is this client, and since all the changes come from the matter engine, we already have the newest state
         acc.push(key)
         return acc
       }, [])
@@ -64,8 +67,7 @@ export default class MatterBodies extends WebWorker() {
           detail: {
             keys: keys.map(key => ({
               key,
-              isSelf: key === uid,
-              getBody: () => ({...event.detail.type.get(key), bid: key})
+              getBody: () => ({...event.detail.type.get(key), bid: key}) // have bid on matter body for making event.data.bodies delivered to web worker matter digestible
             }))
           },
           bubbles: true,
@@ -76,7 +78,7 @@ export default class MatterBodies extends WebWorker() {
     }
 
     /** @type {Map<string, any>} */
-    const bodyTransactions = new Map()
+    const setTransactions = new Map()
     let animationFrameId = null
     this.setBodyEventListener = async event => {
       // TODO: also sync static bodies (does WcBodies.js)
@@ -90,8 +92,8 @@ export default class MatterBodies extends WebWorker() {
       delete event.detail.body.bid
       let body
       if (isSelf) {
-        bodyTransactions.set(key, event.detail.body)
-        if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
+        setTransactions.set(key, event.detail.body)
+        if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _updateMap())
       } else if (
         !(await this.yMap).type.has(key)
         || !(body = (await this.yMap).type.get(key)).ctrl.uid
@@ -100,31 +102,39 @@ export default class MatterBodies extends WebWorker() {
         || body.ctrl.timestamp && (body.ctrl.timestamp + 1000 < Date.now())
       ) {
         // all bodies without a uid
-        bodyTransactions.set(key, {...event.detail.body, ctrl: {
+        setTransactions.set(key, {...event.detail.body, ctrl: {
           uid,
           timestamp: Date.now()
         }})
-        if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _setBody())
+        if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _updateMap())
       }
     }
     const detectCollision = (collisions, selfUid, ctrlUid) => {
       return (collisions.some(collision => collision.uid === selfUid) && collisions.every(collision => collision.uid !== ctrlUid))
     }
-    const _setBody = async () => {
-      if (!bodyTransactions.size) return
-      const {type: yMap, doc} = await this.yMap
-      doc.transact(() => Array.from(bodyTransactions).forEach(([key, body]) => yMap.set(key, body)))
-      bodyTransactions.clear()
-      animationFrameId = null
-    }
 
+    let removeTransactions = []
+    /** @param {CustomEvent<{bid: string, origin: import('../atoms/Body.js').origin}>} event */
     this.removeBodyEventListener = async event => {
+      if (['yjs'].includes(event.detail.origin)) return
       if (!(await this.yMap).type.has(event.detail.bid)) return
       let body
       if (!(body = (await this.yMap).type.get(event.detail.bid))) return
       if (body.ctrl.userControlled && await this.uid !== body.ctrl.uid) return
-      // TODO: decide further rules by event.detail.origin ('yjs' | 'event' | 'preset')
-      (await this.yMap).type.delete(event.detail.bid)
+      removeTransactions.push(event.detail.bid)
+      if (!animationFrameId) animationFrameId = self.requestAnimationFrame(timestamp => _updateMap())
+    }
+
+    const _updateMap = async () => {
+      if (!setTransactions.size && !removeTransactions.length) return
+      const {type: yMap, doc} = await this.yMap
+      doc.transact(() => {
+        Array.from(setTransactions).forEach(([key, body]) => yMap.set(key, body)),
+        removeTransactions.forEach(key => yMap.delete(key))
+      })
+      setTransactions.clear()
+      removeTransactions = []
+      animationFrameId = null
     }
 
     /** @type {(any)=>void} */
@@ -154,7 +164,7 @@ export default class MatterBodies extends WebWorker() {
     this.dispatchEvent(new CustomEvent(`${this.namespace}doc`, {
       detail: {
         command: 'getMap',
-        arguments: ['bodies'],
+        arguments: ['matter-bodies'],
         observe: `${this.namespace}matter-bodies-observe`,
         observeDeep: true,
         resolve: this.yMapResolve

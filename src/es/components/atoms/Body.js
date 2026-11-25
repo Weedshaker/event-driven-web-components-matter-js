@@ -49,13 +49,13 @@ export default class Body extends Intersection() {
       'collision-filter-mask',
       'data-height', // number (required for 'rectangle')
       'data-radius', // number (required for 'circle' and 'polygon')
-      'data-polygon', // number (required for 'polygon')
+      'data-polygon', // string (required for 'polygon')
       'data-width', // number (required for 'rectangle')
       'data-x', // number (position coordinate)
       'data-y', // number (position coordinate)
       'density', // a number that defines the density of the body (mass per unit area)
       'friction-air', // a number that defines the air friction of the body (air resistance). A value of 0 means the body will never slow as it moves through space
-      'friction-static', // controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
+      'friction-static', // a number that controls static friction: how much resistance an object has when another object tries to make it slide while it's at rest
       'friction', // a number that defines the friction of the body. The value is always positive and is in the range (0, 1)
       'inertia', // how difficult it is for an object to rotate
       'is-sensor', // a flag that indicates whether a body is a sensor. Sensor triggers collision events, but doesn't react with colliding body physically
@@ -342,8 +342,19 @@ export default class Body extends Intersection() {
   }
 
   addBody () {
+    // TODO: next continue: src/es/components/controllers/WcBodiesFactory.js:L28 'add' web component
+    this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-wc-add-body') || 'yjs-wc-add-body', {
+      detail: {
+        bid: this.bid,
+        body: Body.attributesToObject(this, true),
+        origin: this.origin
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }))
     // the dispatch must be after rendering
-    const {args, method, error, vertexSets, radius} = Body.getMethodAndArgs(this)
+    const {args, method, error, vertexSets, radius} = Body.getMatterMethodAndArgs(this)
     if (error) {
       console.warn((this.section.textContent = error), this)
       this.setAttribute('has-error', '')
@@ -387,7 +398,16 @@ export default class Body extends Intersection() {
       cancelable: true,
       composed: true
     }))
-    // TODO: next continue here (the below only removes body on yjs-matter-remove-body also do yjs-wc-remove-body to control factory [add-body has to be done as well], then check the clearing of both yMap's)
+    this.#parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-wc-remove-body') || 'yjs-wc-remove-body', {
+      detail: {
+        bid: this.bid,
+        origin: this.origin
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }))
+    // TODO: (the below only removes body on yjs-matter-remove-body also do yjs-wc-remove-body to control factory [add-body has to be done as well], then check the clearing of both yMap's)
     // TODO: doe this logic src/es/components/controllers/MatterBodies.js.removeBodyEventListener here at one place
     this.#parentElement.dispatchEvent(new CustomEvent(this.getAttribute('yjs-matter-remove-body') || 'yjs-matter-remove-body', {
       detail: {
@@ -401,68 +421,89 @@ export default class Body extends Intersection() {
   }
 
   /**
+   * Collect all the WcBody properties from attribues
+   * 
+   * @static
+   * @param {Body} webComponent
+   * @param {boolean} [complete=false]
+   * @returns {import('../controllers/WcBodies.js').WcBody | import('../controllers/MatterWebWorker.js').MatterBodyOptions}
+   */
+  static attributesToObject (webComponent, complete = false) {
+    // collect the matter body type options: https://brm.io/matter-js/docs/classes/Bodies.html
+    let obj = {
+      collisionFilter: {
+        category: webComponent.hasAttribute('collision-filter-category') ? Number(webComponent.getAttribute('collision-filter-category')) : undefined,
+        mask: webComponent.hasAttribute('collision-filter-mask') ? Number(webComponent.getAttribute('collision-filter-mask')) : undefined,
+        group: webComponent.hasAttribute('collision-filter-group') ? Number(webComponent.getAttribute('collision-filter-group')) : undefined
+      },
+      density: webComponent.hasAttribute('density') ? Number(webComponent.getAttribute('density')) : undefined,
+      frictionAir: webComponent.hasAttribute('friction-air') ? Number(webComponent.getAttribute('friction-air')) : undefined,
+      frictionStatic: webComponent.hasAttribute('friction-static') ? Number(webComponent.getAttribute('friction-static')) : undefined,
+      friction: webComponent.hasAttribute('friction') ? Number(webComponent.getAttribute('friction')) : undefined,
+      inertia: webComponent.hasAttribute('inertia') ? Number(webComponent.getAttribute('inertia')) : undefined,
+      isSensor: webComponent.hasAttribute('is-sensor'),
+      isStatic: webComponent.hasAttribute('is-static'),
+      mass: webComponent.hasAttribute('mass') ? Number(webComponent.getAttribute('mass')) : undefined,
+      restitution: webComponent.hasAttribute('restitution') ? Number(webComponent.getAttribute('restitution')) : undefined,
+      timeScale: webComponent.hasAttribute('timeScale') ? Number(webComponent.getAttribute('timeScale')) : undefined
+    }
+    // collect the matter body type and arguments
+    if (complete) obj = {...obj,
+      height: webComponent.hasAttribute('data-height') ? Number(webComponent.getAttribute('data-height')) : undefined,
+      radius: webComponent.hasAttribute('data-radius') ? Number(webComponent.getAttribute('data-radius')) : undefined,
+      polygon: webComponent.getAttribute('data-polygon') || undefined,
+      width: webComponent.hasAttribute('data-width') ? Number(webComponent.getAttribute('data-width')) : undefined,
+      position: {
+        x: webComponent.hasAttribute('data-x') ? Number(webComponent.getAttribute('data-x')) : undefined,
+        y: webComponent.hasAttribute('data-y') ? Number(webComponent.getAttribute('data-y')) : undefined
+      },
+      type: webComponent.getAttribute('type') || undefined,
+      origin: webComponent.origin,
+      ctrl: {
+        uid: webComponent.getAttribute('uid') || '',
+        userControlled: webComponent.hasAttribute('user-controlled')
+      }
+    }
+    // clean the body of any undefined, not needed props to two levels
+    Object.keys(obj).forEach(key => {
+      if (obj[key] === undefined) delete obj[key]
+      if (typeof obj[key] === 'object') {
+        Object.keys(obj[key]).forEach(subKey => {
+          if (obj[key][subKey] === undefined) delete obj[key][subKey]
+        })
+        if (!Object.keys(obj[key]).length) delete obj[key]
+      }
+    })
+    return obj
+  }
+
+  /**
    * Create the method call to create a matter.js body: https://www.brm.io/matter-js/docs/classes/Bodies.html
    * 
    * @param {Body} webComponent
    * @return {{
    *  args: [number, number, number, number, any] | [number, number, number, any] | [number, number, {x: number, y: number}[], any],
-   *  method: 'string',
+   *  method: string,
    *  error: null,
    *  vertexSets?: {x: number, y: number}[],
    *  radius?: number
    * } | {args: null, method: null, error: string, vertexSets?: {x: number, y: number}[], radius?: number}}
    */
-  static getMethodAndArgs (webComponent) {
+  static getMatterMethodAndArgs (webComponent) {
     if (!webComponent.hasAttribute('type')) return {args: null, method: null, error: 'type of shape missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody types: "circle" | "polygon" | "rectangle" is required'}
     const getOptions = () => {
       // custom properties
       const options = {
-        bid: webComponent.getAttribute('bid') || '',
-        ctrl: {
+        bid: webComponent.getAttribute('bid') || '', // have bid on matter body for making event.data.bodies delivered from web worker matter digestible
+        ctrl: { // todo: does not belong here to be sent to matter.js (first do wc-factory)
           uid: webComponent.getAttribute('uid') || '',
           userControlled: webComponent.hasAttribute('user-controlled')
         },
-        collisions: []
+        collisions: [],
+        ...Body.attributesToObject(webComponent)
       }
-      const requireCollisionFilterProp = () => {
-        if (!options.collisionFilter) options.collisionFilter = {}
-      }
-      // Matter.Body properties must only be set if they are available
-      if (webComponent.hasAttribute('collision-filter-category')) {
-        requireCollisionFilterProp()
-        options.collisionFilter.category = webComponent.getAttribute('collision-filter-category')
-      }
-      if (webComponent.hasAttribute('collision-filter-group')) {
-        requireCollisionFilterProp()
-        options.collisionFilter.group = Number(webComponent.getAttribute('collision-filter-group'))
-      }
-      if (webComponent.hasAttribute('collision-filter-mask')) {
-        requireCollisionFilterProp()
-        options.collisionFilter.mask = Number(webComponent.getAttribute('collision-filter-mask'))
-      }
-      if (webComponent.hasAttribute('density')) options.density = Number(webComponent.getAttribute('density'))
-      if (webComponent.hasAttribute('friction-air')) options.frictionAir = Number(webComponent.getAttribute('friction-air'))
-      if (webComponent.hasAttribute('friction-static')) options.frictionStatic = Number(webComponent.getAttribute('friction-static'))
-      if (webComponent.hasAttribute('friction')) options.friction = Number(webComponent.getAttribute('friction'))
-      if (webComponent.hasAttribute('inertia')) options.inertia = Number(webComponent.getAttribute('inertia'))  
-      options.isSensor = webComponent.hasAttribute('is-sensor')
-      options.isStatic = webComponent.hasAttribute('is-static')
-      if (webComponent.hasAttribute('mass')) options.mass = Number(webComponent.getAttribute('mass'))
-      if (webComponent.hasAttribute('restitution')) options.restitution = Number(webComponent.getAttribute('restitution'))
-      if (webComponent.hasAttribute('time-scale')) options.timeScale = Number(webComponent.getAttribute('time-scale'))
       // IMPORTANT: don't change initial angle, otherwise the center calculation is going to be off
       return options
-    }
-    // TODO: check func below
-    const clipPathToVertexSets = (clipPath, radius) => {
-      radius = Number(radius)
-      const num = '(-?\\d*\\.?\\d+)%?'
-      return [
-        [...clipPath.matchAll(new RegExp(`${num}\\s+${num}`, 'g'))].map(([, x, y]) => ({
-          x: (parseFloat(x) - 50) * radius / 50,
-          y: (parseFloat(y) - 50) * radius / 50
-        }))
-      ]
     }
     switch (webComponent.getAttribute('type')) {
       // TODO:  fix circle (circle has no data-width/height so do the css) and do the other shapes plus all data-attributes
@@ -475,14 +516,14 @@ export default class Body extends Intersection() {
             Number(webComponent.getAttribute('data-radius')),
             getOptions()
           ],
-          method: webComponent.getAttribute('type'),
+          method: 'circle',
           error: null
         }
       case 'polygon':
         if (!webComponent.hasAttribute('data-radius') || !webComponent.hasAttribute('data-polygon')) return {args: null, method: null, error: 'Radius or polygon of polygon are missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
         webComponent.setAttribute('data-width-center', 0)
         webComponent.setAttribute('data-height-center', 0)
-        const vertexSets = clipPathToVertexSets(webComponent.getAttribute('data-polygon'), webComponent.getAttribute('data-radius'))[0]
+        const vertexSets = Body.clipPathToVertexSets(webComponent.getAttribute('data-polygon'), webComponent.getAttribute('data-radius'))
         return {
           args: [
             Number(webComponent.getAttribute('data-x') || 0) + Number(webComponent.getAttribute('data-radius')), // matter.js will use the coordinates for center of body but here we do adjust for top/left
@@ -490,9 +531,9 @@ export default class Body extends Intersection() {
             vertexSets,
             getOptions()
           ],
-          method: webComponent.getAttribute('type'),
-          vertexSets,
-          radius: Number(webComponent.getAttribute('data-radius')),
+          method: 'fromVertices', // here fromVertices will be used, since fromVertices is closer to css polygon than just a simple matter.polygon
+          vertexSets, // are used to calculate the center of the body
+          radius: Number(webComponent.getAttribute('data-radius')), // is used to calculate the center of the body
           error: null
         }
       case 'rectangle':
@@ -505,11 +546,28 @@ export default class Body extends Intersection() {
             Number(webComponent.getAttribute('data-height')),
             getOptions()
           ],
-          method: webComponent.getAttribute('type'),
+          method: 'rectangle',
           error: null
         }
     }
     return {args: null, method: null, error: 'type of shape not of types: "circle" | "polygon" | "rectangle". See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody'}
+  }
+
+  /**
+   * Convert a css "clip-path: polygon" - string to x, y coordinate pairs
+   * 
+   * @static
+   * @param {string} clipPath
+   * @param {number} radius
+   * @returns {{ x: number; y: number; }[]}
+   */
+  static clipPathToVertexSets (clipPath, radius) {
+    radius = Number(radius)
+    const num = '(-?\\d*\\.?\\d+)%?'
+    return [...clipPath.matchAll(new RegExp(`${num}\\s+${num}`, 'g'))].map(([, x, y]) => ({
+      x: (parseFloat(x) - 50) * radius / 50,
+      y: (parseFloat(y) - 50) * radius / 50
+    }))
   }
 
   get section () {

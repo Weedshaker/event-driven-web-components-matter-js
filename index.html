@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- websocket: http://localhost:4500/src/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fheroku.decentral.ninja%2F%3Fkeep-alive%3D0 -->
-<!-- websocket: http://localhost:4500/src/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fwebsocket.peerweb.site%2F%3Fkeep-alive%3D0 -->
-<!-- webrtc: http://localhost:4500/src/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-two.peerweb.site%2F -->
-<!-- webrtc trystero: http://localhost:4500/src/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-trystero.ninja%2F -->
+<!-- websocket: http://localhost:4500/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fheroku.decentral.ninja%2F%3Fkeep-alive%3D0 -->
+<!-- websocket: http://localhost:4500/index.html?room=MatterDOMie&websocket-url=wss%3A%2F%2Fwebsocket.peerweb.site%2F%3Fkeep-alive%3D0 -->
+<!-- webrtc: http://localhost:4500/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-two.peerweb.site%2F -->
+<!-- webrtc trystero: http://localhost:4500/index.html?room=MatterDOMie&webrtc-url=wss%3A%2F%2Fwebrtc-trystero.ninja%2F -->
 <!-- https://www.brm.io/matter-js/ -->
 <head>
   <meta charset="UTF-8">
@@ -13,14 +13,18 @@
 <body data-data-width="950" data-height="400">
   <c-event-driven-yjs no-blur>
     <c-users no-nickname no-public-key>
-      <c-matter-bodies>
-        <c-matter>
-          <a-body type="polygon" data-x=50 data-y=0 data-radius=75 data-polygon="50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%" user-controlled background="green"></a-body>
-          <a-body type="rectangle" data-x=100 data-y=0 data-width=50 data-height=50 background="red" bid="some-object-uid-999-888-567"></a-body>
-          <a-body type="circle" data-x=150 data-y=0 data-width=50 data-radius=50 background="red" bid="some-object-uid-999-888-566"></a-body>
-          <a-body type="rectangle" data-x=0 data-y=350 data-width=950 data-height=50 background=darkblue is-static></a-body>
-        </c-matter>
-      </c-matter-bodies>
+      <c-wc-bodies>
+        <c-matter-bodies>
+          <c-matter>
+            <c-wc-bodies-factory>
+              <a-body collision-filter-group="2" type="polygon" data-x=50 data-y=0 data-radius=75 data-polygon="50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%" user-controlled background="green"></a-body>
+              <a-body type="rectangle" data-x=100 data-y=0 data-width=50 data-height=50 background="red" bid="some-object-uid-999-888-567"></a-body>
+              <a-body type="circle" data-x=150 data-y=0 data-width=50 data-radius=50 background="red" bid="some-object-uid-999-888-566"></a-body>
+              <a-body type="rectangle" data-x=0 data-y=350 data-width=950 data-height=50 background=darkblue is-static bid="some-object-uid-999-888-565"></a-body>
+            </c-wc-bodies-factory>
+          </c-matter>
+        </c-matter-bodies>
+      </c-wc-bodies>
     </c-event-driven-yjs>
     </c-users>
   <style>
@@ -37,8 +41,10 @@
       // Helpers
       import('./src/es/event-driven-web-components-yjs/src/es/EventDrivenYjs.js').then(module => ['c-event-driven-yjs', module.EventDrivenYjs()]),
       import('./src/es/event-driven-web-components-yjs/src/es/controllers/Users.js').then(module => ['c-users', module.Users()]),
+      import('./src/es/components/controllers/WcBodies.js').then(module => ['c-wc-bodies', module.default]),
       import('./src/es/components/controllers/MatterBodies.js').then(module => ['c-matter-bodies', module.default]),
       import('./src/es/components/controllers/Matter.js').then(module => ['c-matter', module.default]),
+      import('./src/es/components/controllers/WcBodiesFactory.js').then(module => ['c-wc-bodies-factory', module.default]),
       import('./src/es/components/atoms/Body.js').then(module => ['a-body', module.default]),
     ]).then(elements => elements.forEach(element => {
       // don't define already existing customElements
