@@ -21,14 +21,17 @@ export default class WcBodiesFactory extends HTMLElement {
 
     this.importMetaUrl = import.meta.url.replace(/(.*\/)(.*)$/, '$1')
 
-    /** @param {CustomEvent<{keysAction: {key: string, value: 'add' | 'update' | 'delete', getBody: () => import('./WcBodies').WcBody}[]}>} event */
+    /** @param {CustomEvent<{keysAction: {key: string, value: 'add' | 'update' | 'delete', getBody: () => {body: import('./WcBodies').WcBody, isSelf: boolean}}[]}>} event */
     this.wcBodiesEventListener = async event => {
       event.detail.keysAction.forEach(async ({key, value, getBody}) => {
+        let webComponent
         switch (value) {
           case 'add':
-            const body = getBody()
-            let webComponent
-            if (!this.querySelector(`[bid="${key}"]`)) {
+            const {body, isSelf} = getBody()
+            if (!isSelf && !this.querySelector(`[bid="${key}"]`)) {
+              // TODO: clean up when removing already existing body and/or remove attribute user-controlled
+              let prevBody
+              if (body.ctrl.userControlled && (prevBody = this.querySelector(`[uid="${body.ctrl.uid}"]`))) prevBody.remove()
               const module = await import(`${this.importMetaUrl}../atoms/Body.js`)
               webComponent = new module.default({bid: key, origin: 'yjs'})
               module.default.objectToAttributes(webComponent, body)
@@ -36,10 +39,10 @@ export default class WcBodiesFactory extends HTMLElement {
             }
             break
           case 'update':
-            
+            // TODO: update wc body attributes
             break
           case 'delete':
-            
+            if ((webComponent = this.querySelector(`[bid="${key}"]`))) webComponent.remove()
             break
         }
       })

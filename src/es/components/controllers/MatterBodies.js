@@ -67,7 +67,9 @@ export default class MatterBodies extends WebWorker() {
           detail: {
             keys: keys.map(key => ({
               key,
-              getBody: () => ({...event.detail.type.get(key), bid: key}) // have bid on matter body for making event.data.bodies delivered to web worker matter digestible
+              getBody: () => ({
+                body:{...event.detail.type.get(key), bid: key}
+              }) // have bid on matter body for making event.data.bodies delivered to web worker matter digestible
             }))
           },
           bubbles: true,
@@ -84,8 +86,8 @@ export default class MatterBodies extends WebWorker() {
       // TODO: also sync static bodies (does WcBodies.js)
       // TODO: make this more flexible with ctrl. when !event.detail.isSelf && event.detail.body.ctrl.uid don't just not treat it but make it smarter through ctrl
       // don't deal with other user bodies as well as with static bodies
-      const uid = await this.uid
-      const isSelf = event.detail.body.ctrl.userControlled && uid === event.detail.body.ctrl.uid
+      let uid
+      const isSelf = event.detail.body.ctrl.userControlled && (uid = await this.uid) === event.detail.body.ctrl.uid
       if (!isSelf && (event.detail.body.ctrl.userControlled || event.detail.body.isStatic)) return
       const key = event.detail.body.bid
       // bid is already the map key for this body, so we remove this for the CRDT and readd it at getBody

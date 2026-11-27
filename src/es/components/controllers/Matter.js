@@ -199,7 +199,7 @@ export default class MatterElement extends HTMLElement {
     const webComponentMap = new Map()
     this.matterBodiesEventListener = event => this.worker.postMessage({
       type: 'matterBodies',
-      bodies: event.detail.keys.map(({getBody}) => getBody())
+      bodies: event.detail.keys.map(({getBody}) => getBody().body)
     })
   }
 

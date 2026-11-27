@@ -60,20 +60,23 @@ export default class WcBodies extends WebWorker() {
       this.uidResolve(`${bodySelectorNamespace}${JSON.parse(event.detail.uid).uuid}`)
     }
 
-    this.bodiesObserveEventListener = event => {
+    // TODO: jsdocs for event
+    this.bodiesObserveEventListener = async event => {
       // Array.from Map with key (bid) and value {action: "add" | "update" | "delete" | etc. see yjs doc}
-      const keysAction = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).reduce((acc, [key, value]) => {
-        acc.push([key, value.action])
-        return acc
-      }, [])
+      const keysAction = Array.from(event.detail.yjsEvent?.[0]?.changes?.keys || []).map(([key, value]) => ([key, value.action]))
       if (keysAction.length) {
+        const uid = await this.uid
         this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}wc-bodies`) || `${this.namespace}wc-bodies`, {
           detail: {
-            // todo: action instead of value
             keysAction: keysAction.map(([key, value]) => ({
               key,
               value,
-              getBody: () => event.detail.type.get(key) // have bid on matter body for making event.data.bodies delivered to web worker matter digestible
+              getBody: () => ({
+                body: event.detail.type.get(key),
+                get isSelf () {
+                  return this.body.ctrl.userControlled && uid === this.body.ctrl.uid
+                }
+               }) // have bid on matter body for making event.data.bodies delivered to web worker matter digestible
             }))
           },
           bubbles: true,

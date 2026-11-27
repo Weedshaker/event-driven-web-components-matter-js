@@ -257,7 +257,7 @@ export default class Body extends Intersection() {
           this.doOnIntersection = null
         }
         // trigger the dispatch when attribute intersecting or attribute self, in both cases we want to inform yjs crdt about the changes
-        if (this.hasAttribute('intersecting') || this.hasAttribute('user-controlled')) this.doOnIntersection()
+        if (this.hasAttribute('intersecting') || (this.hasAttribute('user-controlled') && this.origin === 'preset')) this.doOnIntersection()
       }
       if (sleepStart) initiateDoOnIntersectionOnce()
       /*
@@ -323,12 +323,14 @@ export default class Body extends Intersection() {
   }
 
   connectedCallback () {
+    // keep this reference for dispatching when disconnected
+    if (this.isConnected) this.#parentElement = this.parentElement
     if (this.shouldRenderCSS()) this.renderCSS()
     if (this.shouldRenderHTML()) this.renderHTML()
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.addEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    if (this.hasAttribute('user-controlled')) {
+    if (this.hasAttribute('user-controlled') && this.origin === 'preset') {
       this.addEventListener('pointerdown', this.pointerdownEventListener)
       this.addEventListener('pointermove', this.pointermoveEventListener)
       this.addEventListener('pointerup', this.pointerupEventListener)
@@ -342,15 +344,13 @@ export default class Body extends Intersection() {
       super.connectedCallback() // start intersection observer
       this.addBody()
     }
-    // keep this reference for dispatching when disconnected
-    if (this.isConnected) this.#parentElement = this.parentElement
   }
 
   disconnectedCallback () {
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-body') || 'matter-body'}-${this.bid}`, this.matterBodyEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-start-body') || 'matter-sleep-start-body'}-${this.bid}`, this.matterSleepStartEventListener)
     this.globalEventTarget.removeEventListener(`${this.getAttribute('matter-sleep-end-body') || 'matter-sleep-end-body'}-${this.bid}`, this.matterSleepEndEventListener)
-    if (this.hasAttribute('user-controlled')) {
+    if (this.hasAttribute('user-controlled') && this.origin === 'preset') {
       this.removeEventListener('pointerdown', this.pointerdownEventListener)
       this.removeEventListener('pointermove', this.pointermoveEventListener)
       this.removeEventListener('pointerup', this.pointerupEventListener)
@@ -598,11 +598,10 @@ export default class Body extends Intersection() {
    * @static
    * @param {Body} webComponent
    * @param {import('../controllers/WcBodies.js').WcBody | import('../controllers/MatterWebWorker.js').MatterBodyOptions} obj
-   * @param {string[]} [filterOut=['user-controlled']]
    * @param {boolean} [overwrite=false]
    * @returns {void}
    */
-  static objectToAttributes (webComponent, obj, filterOut = ['user-controlled'], overwrite = false) {
+  static objectToAttributes (webComponent, obj, overwrite = false) {
     const flattenObj = (obj, prefix = '') => Object.keys(obj).reduce((acc, key) => {
       const path = prefix ? `${prefix}.${key}` : key
       if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
@@ -616,7 +615,6 @@ export default class Body extends Intersection() {
     flattenObj(obj).forEach(keyValue => {
       let map
       if ((map = Body.#attributeObjectMapping.find(map => map.key === keyValue[0]))) {
-        if (filterOut.includes(map.name)) return
         if (map.type === 'boolean') {
           if (keyValue[1]) {
             webComponent.setAttribute(map.name, '')
