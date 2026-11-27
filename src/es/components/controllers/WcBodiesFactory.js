@@ -30,17 +30,8 @@ export default class WcBodiesFactory extends HTMLElement {
             let webComponent
             if (!this.querySelector(`[bid="${key}"]`)) {
               const module = await import(`${this.importMetaUrl}../atoms/Body.js`)
-              webComponent = new module.default
-              webComponent.setAttribute('type', 'rectangle')
-              webComponent.setAttribute('data-x', body.position.x)
-              webComponent.setAttribute('data-y', body.position.y)
-              webComponent.setAttribute('bid', key)
-              webComponent.setAttribute('uid', body.ctrl.uid)
-              webComponent.setAttribute('origin', 'yjs')
-              if (body.isStatic) webComponent.setAttribute('is-static', '')
-              // TODO: make dynamic width, height, shape
-              webComponent.setAttribute('data-width', '50')
-              webComponent.setAttribute('data-height', '50')
+              webComponent = new module.default({bid: key, origin: 'yjs'})
+              module.default.objectToAttributes(webComponent, body)
               this.appendChild(webComponent)
             }
             break

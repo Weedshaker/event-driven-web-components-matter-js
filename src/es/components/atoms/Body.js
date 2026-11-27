@@ -11,7 +11,7 @@
  @typedef {{
   namespace?: string, // namespace the events dispatched
   bid?: string // every class is going to possess a unique bid,
-  origin: origin,
+  origin?: origin,
   accuracy?: {
     position: number,
     rotation: number // max accuracy for rotation is 2, this is capped by src/es/components/controllers/MatterWebWorker.js mapBodyToYjsMatterBody to avoid -0.00 not matching 0.00
@@ -67,6 +67,143 @@ export default class Body extends Intersection() {
     ]
   }
 
+  /**
+   * maps matter.js compatible object key with web component host attribute name
+   * option === true is for https://brm.io/matter-js/docs/classes/Bodies.html create funcs option
+   * 
+   * @type {{key: string, name: string, type: 'number' | 'string' | 'boolean', option?: boolean}[]}
+   */
+  static #attributeObjectMapping = [
+    {
+      key: 'collisionFilter.category',
+      name: 'collision-filter-category',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'collisionFilter.mask',
+      name: 'collision-filter-mask',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'collisionFilter.group',
+      name: 'collision-filter-group',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'density',
+      name: 'density',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'frictionAir',
+      name: 'friction-air',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'frictionStatic',
+      name: 'friction-static',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'friction',
+      name: 'friction',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'inertia',
+      name: 'inertia',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'isSensor',
+      name: 'is-sensor',
+      type: 'boolean',
+      option: true
+    },
+    {
+      key: 'isStatic',
+      name: 'is-static',
+      type: 'boolean',
+      option: true
+    },
+    {
+      key: 'mass',
+      name: 'mass',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'restitution',
+      name: 'restitution',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'timeScale',
+      name: 'time-scale',
+      type: 'number',
+      option: true
+    },
+    {
+      key: 'height',
+      name: 'data-height',
+      type: 'number'
+    },
+    {
+      key: 'radius',
+      name: 'data-radius',
+      type: 'number'
+    },
+    {
+      key: 'polygon',
+      name: 'data-polygon',
+      type: 'string'
+    },
+    {
+      key: 'width',
+      name: 'data-width',
+      type: 'number'
+    },
+    {
+      key: 'position.x',
+      name: 'data-x',
+      type: 'number'
+    },
+    {
+      key: 'position.y',
+      name: 'data-y',
+      type: 'number'
+    },
+    {
+      key: 'type',
+      name: 'type',
+      type: 'string'
+    },
+    {
+      key: 'origin',
+      name: 'origin',
+      type: 'string'
+    },
+    {
+      key: 'ctrl.uid',
+      name: 'uid',
+      type: 'string'
+    },
+    {
+      key: 'ctrl.userControlled',
+      name: 'user-controlled',
+      type: 'boolean'
+    }
+  ]
+
   /** @type {HTMLElement | null} */
   #parentElement = null
   
@@ -76,17 +213,17 @@ export default class Body extends Intersection() {
    * @param {options} [options = {namespace=undefined, bid=undefined}]
    * @param {*} args
    */
-  constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined, origin: 'preset' }, ...args) {
+  constructor (options = { namespace: undefined, bid: undefined, accuracy: undefined, origin: undefined }, ...args) {
     super({ intersectionObserverInit: {rootMargin: '0px 0px 0px 0px'} }, ...args)
 
     // set attribute namespace
     if (options.namespace) this.namespace = options.namespace
     else if (!this.namespace) this.namespace = 'wc-body-'
-
+    
     // unique body id used to identify at yjs and matter.js
     if (options.bid) this.bid = options.bid
     else if (!this.bid) this.bid = `${bodySelectorNamespace}${self.crypto.randomUUID()}`
-
+    
     // the bodies origin, usually set by the factory
     if (options.origin) this.origin = options.origin
     else if (!this.origin) this.origin = 'preset'
@@ -346,7 +483,7 @@ export default class Body extends Intersection() {
     this.dispatchEvent(new CustomEvent(this.getAttribute('yjs-wc-add-body') || 'yjs-wc-add-body', {
       detail: {
         bid: this.bid,
-        body: Body.attributesToObject(this, true),
+        body: Body.attributesToObject(this),
         origin: this.origin
       },
       bubbles: true,
@@ -421,60 +558,76 @@ export default class Body extends Intersection() {
   }
 
   /**
-   * Collect all the WcBody properties from attribues
+   * Collect all the WcBody properties from attributes and put it into a matter.js compatible object
    * 
    * @static
    * @param {Body} webComponent
-   * @param {boolean} [complete=false]
+   * @param {boolean} [onlyOptions=false]
    * @returns {import('../controllers/WcBodies.js').WcBody | import('../controllers/MatterWebWorker.js').MatterBodyOptions}
    */
-  static attributesToObject (webComponent, complete = false) {
+  static attributesToObject (webComponent, onlyOptions = false) {
     // collect the matter body type options: https://brm.io/matter-js/docs/classes/Bodies.html
-    let obj = {
-      collisionFilter: {
-        category: webComponent.hasAttribute('collision-filter-category') ? Number(webComponent.getAttribute('collision-filter-category')) : undefined,
-        mask: webComponent.hasAttribute('collision-filter-mask') ? Number(webComponent.getAttribute('collision-filter-mask')) : undefined,
-        group: webComponent.hasAttribute('collision-filter-group') ? Number(webComponent.getAttribute('collision-filter-group')) : undefined
-      },
-      density: webComponent.hasAttribute('density') ? Number(webComponent.getAttribute('density')) : undefined,
-      frictionAir: webComponent.hasAttribute('friction-air') ? Number(webComponent.getAttribute('friction-air')) : undefined,
-      frictionStatic: webComponent.hasAttribute('friction-static') ? Number(webComponent.getAttribute('friction-static')) : undefined,
-      friction: webComponent.hasAttribute('friction') ? Number(webComponent.getAttribute('friction')) : undefined,
-      inertia: webComponent.hasAttribute('inertia') ? Number(webComponent.getAttribute('inertia')) : undefined,
-      isSensor: webComponent.hasAttribute('is-sensor'),
-      isStatic: webComponent.hasAttribute('is-static'),
-      mass: webComponent.hasAttribute('mass') ? Number(webComponent.getAttribute('mass')) : undefined,
-      restitution: webComponent.hasAttribute('restitution') ? Number(webComponent.getAttribute('restitution')) : undefined,
-      timeScale: webComponent.hasAttribute('timeScale') ? Number(webComponent.getAttribute('timeScale')) : undefined
-    }
-    // collect the matter body type and arguments
-    if (complete) obj = {...obj,
-      height: webComponent.hasAttribute('data-height') ? Number(webComponent.getAttribute('data-height')) : undefined,
-      radius: webComponent.hasAttribute('data-radius') ? Number(webComponent.getAttribute('data-radius')) : undefined,
-      polygon: webComponent.getAttribute('data-polygon') || undefined,
-      width: webComponent.hasAttribute('data-width') ? Number(webComponent.getAttribute('data-width')) : undefined,
-      position: {
-        x: webComponent.hasAttribute('data-x') ? Number(webComponent.getAttribute('data-x')) : undefined,
-        y: webComponent.hasAttribute('data-y') ? Number(webComponent.getAttribute('data-y')) : undefined
-      },
-      type: webComponent.getAttribute('type') || undefined,
-      origin: webComponent.origin,
-      ctrl: {
-        uid: webComponent.getAttribute('uid') || '',
-        userControlled: webComponent.hasAttribute('user-controlled')
-      }
-    }
-    // clean the body of any undefined, not needed props to two levels
-    Object.keys(obj).forEach(key => {
-      if (obj[key] === undefined) delete obj[key]
-      if (typeof obj[key] === 'object') {
-        Object.keys(obj[key]).forEach(subKey => {
-          if (obj[key][subKey] === undefined) delete obj[key][subKey]
-        })
-        if (!Object.keys(obj[key]).length) delete obj[key]
+    /** @type {import('../controllers/WcBodies.js').WcBody | import('../controllers/MatterWebWorker.js').MatterBodyOptions} */
+    // @ts-ignore
+    const obj = {}
+    Body.#attributeObjectMapping.forEach(({key, name, type, option}) => {
+      if (onlyOptions && !option) return
+      if (type === 'boolean' || webComponent.hasAttribute(name) || webComponent.hasOwnProperty(name)) {
+        key.split('.').reduce((acc, key, index, arr) => {
+          if (acc[key]) return acc[key]
+          if (index === arr.length - 1) {
+            const value = type === 'boolean' ? webComponent.hasAttribute(name) : (webComponent[name] || webComponent.getAttribute(name))
+            acc[key] = type === 'number'
+              ? Number(value)
+              : type === 'string'
+                ? value || ''
+                : value
+          } else {
+            acc[key] = {}
+          }
+          return acc[key]
+        }, obj)
       }
     })
     return obj
+  }
+
+  /**
+   * Set all the WcBody properties to webComponent attributes
+   * 
+   * @static
+   * @param {Body} webComponent
+   * @param {import('../controllers/WcBodies.js').WcBody | import('../controllers/MatterWebWorker.js').MatterBodyOptions} obj
+   * @param {string[]} [filterOut=['user-controlled']]
+   * @param {boolean} [overwrite=false]
+   * @returns {void}
+   */
+  static objectToAttributes (webComponent, obj, filterOut = ['user-controlled'], overwrite = false) {
+    const flattenObj = (obj, prefix = '') => Object.keys(obj).reduce((acc, key) => {
+      const path = prefix ? `${prefix}.${key}` : key
+      if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+        acc.push(...flattenObj(obj[key], path))
+      } else {
+        // @ts-ignore
+        acc.push([path, obj[key]])
+      }
+      return acc
+    }, [])
+    flattenObj(obj).forEach(keyValue => {
+      let map
+      if ((map = Body.#attributeObjectMapping.find(map => map.key === keyValue[0]))) {
+        if (filterOut.includes(map.name)) return
+        if (map.type === 'boolean') {
+          if (keyValue[1]) {
+            webComponent.setAttribute(map.name, '')
+          } else {
+            webComponent.removeAttribute(map.name)
+          }
+        } else if (overwrite || webComponent.getAttribute(map.name) === null) {
+          webComponent.setAttribute(map.name, keyValue[1])
+        }
+      }
+    })
   }
 
   /**
@@ -493,17 +646,16 @@ export default class Body extends Intersection() {
     if (!webComponent.hasAttribute('type')) return {args: null, method: null, error: 'type of shape missing. See https://www.brm.io/matter-js/docs/classes/Bodies.html + src/es/components/controllers/WcBodies.js typedef WcBody types: "circle" | "polygon" | "rectangle" is required'}
     const getOptions = () => {
       // custom properties
-      const options = {
+      // IMPORTANT: don't change initial angle, otherwise the center calculation is going to be off
+      return {
         bid: webComponent.getAttribute('bid') || '', // have bid on matter body for making event.data.bodies delivered from web worker matter digestible
         ctrl: { // todo: does not belong here to be sent to matter.js (first do wc-factory)
           uid: webComponent.getAttribute('uid') || '',
           userControlled: webComponent.hasAttribute('user-controlled')
         },
         collisions: [],
-        ...Body.attributesToObject(webComponent)
+        ...Body.attributesToObject(webComponent, true)
       }
-      // IMPORTANT: don't change initial angle, otherwise the center calculation is going to be off
-      return options
     }
     switch (webComponent.getAttribute('type')) {
       // TODO:  fix circle (circle has no data-width/height so do the css) and do the other shapes plus all data-attributes

@@ -5,7 +5,7 @@ import { bodySelectorNamespace } from '../atoms/Body.js'
 /**
  * web component attribute controlled props
  @typedef {{
-  collisionFilter: {
+  collisionFilter?: {
     category?: import('./Matter.js').CollisionCategory,
     mask?: import('./Matter.js').CollisionCategory,
     group?: number
@@ -14,7 +14,7 @@ import { bodySelectorNamespace } from '../atoms/Body.js'
   radius?: number,
   polygon?: string,
   width?: number,
-  position: {x?: number, y?: number},
+  position?: {x?: number, y?: number},
   density?: number,
   frictionAir?: number,
   frictionStatic?: number,
@@ -69,6 +69,7 @@ export default class WcBodies extends WebWorker() {
       if (keysAction.length) {
         this.dispatchEvent(new CustomEvent(this.getAttribute(`${this.namespace}wc-bodies`) || `${this.namespace}wc-bodies`, {
           detail: {
+            // todo: action instead of value
             keysAction: keysAction.map(([key, value]) => ({
               key,
               value,
