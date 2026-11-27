@@ -314,6 +314,7 @@ export default class Body extends Intersection() {
     }
 
     this.usersEventListener = event => {
+      // todo: check for wcBodies.type if isSelf and then remove
       if (event.detail.selfUser?.uid) {
         this.globalEventTarget.removeEventListener('yjs-users', this.usersEventListener)
         this.setAttribute('uid', `${bodySelectorNamespace}${JSON.parse(event.detail.selfUser.uid).uuid}`)
